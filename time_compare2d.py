@@ -3,7 +3,7 @@ import torch.nn as nn
 import time
 from numpy import mean, std
 
-from Steerable2d.conv_layers import *
+import Steerable.nn as snn
 
 
 ###################################################################################################################
@@ -19,14 +19,14 @@ class Model(torch.nn.Module):
         conv_first = conv_first
         
         self.network = nn.Sequential(
-            SE2ConvType1(1, 2, 3, n_radius=n_radius, n_theta=n_theta, max_m=max_m, padding='same', conv_first = conv_first),
-            CGNonLinearity2D(max_m=max_m),
-            SE2ConvType2(2, 2, 3, n_radius=n_radius, n_theta=n_theta, max_m=max_m, padding='same', restricted=restricted, conv_first = conv_first),
-            #SteerableBatchNorm2D(),
+            snn.SE2ConvType1(1, 2, 3, n_radius=n_radius, n_theta=n_theta, max_m=max_m, padding='same', conv_first = conv_first),
+            snn.SE2CGNonLinearity(max_m=max_m),
+            snn.SE2ConvType2(2, 2, 3, n_radius=n_radius, n_theta=n_theta, max_m=max_m, padding='same', restricted=restricted, conv_first = conv_first),
+            snn.SE2BatchNorm(),
             
-            SE2ConvType2(2, 2, 3, n_radius=n_radius, n_theta=n_theta, max_m=max_m, padding='same', restricted=restricted, conv_first = conv_first),
+            snn.SE2ConvType2(2, 2, 3, n_radius=n_radius, n_theta=n_theta, max_m=max_m, padding='same', restricted=restricted, conv_first = conv_first),
             
-            NormFlatten()
+            snn.SE2NormFlatten()
             
         )
     

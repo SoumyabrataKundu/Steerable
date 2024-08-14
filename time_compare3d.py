@@ -3,7 +3,7 @@ import torch.nn as nn
 import time
 from numpy import mean, std
 
-from Steerable3d.conv_layers import *
+import Steerable.nn as snn
 
 
 ###################################################################################################################
@@ -17,14 +17,14 @@ class Model(torch.nn.Module):
         n_theta = 40
         
         self.network = nn.Sequential(
-            SE3Conv(1, [2,3], 3, n_radius=n_radius, n_theta=n_theta, padding='same', restricted=restricted, conv_first=conv_first),
-            HNonLinearity3D([2,3]),
-            SE3Conv([2,3], [2,3], 3, n_radius=n_radius, n_theta=n_theta, padding='same', restricted=restricted, conv_first=conv_first),
-            SteerableBatchNorm3D(),
+            snn.SE3Conv(1, [2,3], 3, n_radius=n_radius, n_theta=n_theta, padding='same', restricted=restricted, conv_first=conv_first),
+            snn.SE3NormNonLinearity([2,3]),
+            snn.SE3Conv([2,3], [2,3], 3, n_radius=n_radius, n_theta=n_theta, padding='same', restricted=restricted, conv_first=conv_first),
+            snn.SE3BatchNorm(),
             
-            SE3Conv([2,3], [1,1], 3, n_radius=n_radius, n_theta=n_theta, padding='same', restricted=restricted, conv_first=conv_first),
+            snn.SE3Conv([2,3], [1,1], 3, n_radius=n_radius, n_theta=n_theta, padding='same', restricted=restricted, conv_first=conv_first),
             
-            NormFlatten()
+            snn.SE3NormFlatten()
             
         )
     

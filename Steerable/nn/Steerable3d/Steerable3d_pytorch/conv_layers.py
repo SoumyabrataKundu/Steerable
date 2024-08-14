@@ -102,9 +102,9 @@ class SE3Conv(nn.Module):
 #################################################### Non-linearity #####################################################
 ########################################################################################################################
 
-class HNonLinearity3D(nn.Module):
+class SE3NormNonLinearity(nn.Module):
     def __init__(self, in_channels):
-        super(HNonLinearity3D, self).__init__()
+        super(SE3NormNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.ReLU()
         self.eps = 1e-5
@@ -122,9 +122,9 @@ class HNonLinearity3D(nn.Module):
         
         return result
     
-class GatedNonLinearity3D(nn.Module):
+class SE3GatedNonLinearity(nn.Module):
     def __init__(self, in_channels, kernel_size, n_radius, n_theta):
-        super(GatedNonLinearity3D, self).__init__()
+        super(SE3GatedNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.Sigmoid()
         self.layer = SE3Conv(in_channels, sum(in_channels), kernel_size, n_radius, n_theta, padding='same')
@@ -146,9 +146,9 @@ class GatedNonLinearity3D(nn.Module):
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-class SteerableBatchNorm3D(nn.Module):
+class SE3BatchNorm(nn.Module):
     def __init__(self):
-        super(SteerableBatchNorm3D, self).__init__()
+        super(SE3BatchNorm, self).__init__()
         self.eps = 1e-5
 
     def forward(self, x):
@@ -179,9 +179,9 @@ class SE3AvgPool(nn.Module):
 ################################################### Invariant Layers ##################################################
 #######################################################################################################################
 
-class NormFlatten3D(nn.Module):
+class SE3NormFlatten(nn.Module):
     def __init__(self):
-        super(NormFlatten3D, self).__init__()
+        super(SE3NormFlatten, self).__init__()
 
     def forward(self, x):
         parts = []

@@ -109,9 +109,9 @@ class SE3Conv(nn.Module):
 #################################################### Non-linearity #####################################################
 ########################################################################################################################
 
-class CGNonLinearity3D(nn.Module):
+class SE3CGNonLinearity(nn.Module):
     def __init__(self, in_channels):
-        super(CGNonLinearity3D, self).__init__()
+        super(SE3CGNonLinearity, self).__init__()
 
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.maxl = len(in_channels) - 1
@@ -124,9 +124,9 @@ class CGNonLinearity3D(nn.Module):
         x.parts = [x.parts[l] @ self.weights[l] for l in range(self.maxl+1)]
         return x
 
-class HNonLinearity3D(nn.Module):
+class SE3NormNonLinearity(nn.Module):
     def __init__(self, in_channels):
-        super(HNonLinearity3D, self).__init__()
+        super(SE3NormNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.ReLU()
         self.eps = 1e-5
@@ -143,9 +143,9 @@ class HNonLinearity3D(nn.Module):
         
         return result
     
-class GatedNonLinearity3D(nn.Module):
+class SE3GatedNonLinearity(nn.Module):
     def __init__(self, in_channels, kernel_size, n_radius, n_theta):
-        super(GatedNonLinearity3D, self).__init__()
+        super(SE3GatedNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.Sigmoid()
         self.layer = SE3Conv(in_channels, sum(in_channels), kernel_size, n_radius, n_theta, padding='same')
@@ -167,9 +167,9 @@ class GatedNonLinearity3D(nn.Module):
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-class SteerableBatchNorm3D(nn.Module):
+class SE3BatchNorm(nn.Module):
     def __init__(self):
-        super(SteerableBatchNorm3D, self).__init__()
+        super(SE3BatchNorm, self).__init__()
         self.eps = 1e-5
 
     def forward(self, x):
@@ -203,9 +203,9 @@ class SE3AvgPool(nn.Module):
 ################################################### Invariant Layers ##################################################
 #######################################################################################################################
 
-class NormFlatten(nn.Module):
+class SE3NormFlatten(nn.Module):
     def __init__(self):
-        super(NormFlatten, self).__init__()
+        super(SE3NormFlatten, self).__init__()
 
     def forward(self, x):
         parts = []

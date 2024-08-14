@@ -197,12 +197,12 @@ class SE2DeConvType2(_SE2DeConv, SE2ConvType2):
 ################################################### Non-linearity #####################################################
 #######################################################################################################################
 
-class CGNonLinearity2D(nn.Module):
+class SE2CGNonLinearity(nn.Module):
     '''
     The Clebsch Gordan Non-Linearity Module
     '''
     def __init__(self, max_m):
-        super(CGNonLinearity2D, self).__init__()
+        super(SE2CGNonLinearity, self).__init__()
         self.max_m = max_m
         self.CG_Matrix = get_CG_matrix(max_m)
         
@@ -212,14 +212,14 @@ class CGNonLinearity2D(nn.Module):
         return x
 
 
-class NonLinearity2D(nn.Module):
+class SE2NonLinearity(nn.Module):
     '''
     This module takes the tensor to the Time domain, performs a non-linearity
     there and then transforms it back to Fourier domain.
     The default non-linearity is ReLU.
     '''
     def __init__(self, max_m, nonlinearity = nn.ReLU()):
-        super(NonLinearity2D, self).__init__()
+        super(SE2NonLinearity, self).__init__()
         self.FT = torch.fft.fft(torch.eye(max_m, max_m)) / sqrt(max_m)
         self.IFT = torch.fft.ifft(torch.eye(max_m, max_m)) / sqrt(max_m)
         self.nonlinearity = nonlinearity
@@ -235,13 +235,13 @@ class NonLinearity2D(nn.Module):
         return x
     
 
-class HNonLinearity2D(nn.Module):
+class SE2NormNonLinearity(nn.Module):
     '''
     This module takes the tensor applies non-linearity to absolute value of the tensor
     The default non-linearity is ReLU.
     '''
     def __init__(self, in_channels, max_m, nonlinearity = torch.nn.ReLU()):
-        super(HNonLinearity2D, self).__init__()
+        super(SE2NormNonLinearity, self).__init__()
         self.eps = 1e-5
         self.nonlinearity = nonlinearity
         self.b = nn.Parameter(torch.randn(max_m, in_channels))
@@ -257,9 +257,9 @@ class HNonLinearity2D(nn.Module):
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-class SteerableBatchNorm2D(nn.Module):
+class SE2BatchNorm(nn.Module):
     def __init__(self):
-        super(SteerableBatchNorm2D, self).__init__()
+        super(SE2BatchNorm, self).__init__()
         self.eps = 1e-5
 
     def forward(self, x):
@@ -290,18 +290,18 @@ class SE2AvgPool(nn.Module):
 ################################################### Invariant Layers ##################################################
 #######################################################################################################################
 
-class NormFlatten2D(nn.Module):
+class SE2NormFlatten(nn.Module):
     def __init__(self):
-        super(NormFlatten2D, self).__init__()
+        super(SE2NormFlatten, self).__init__()
 
     def forward(self, x):
         x = torch.mean(x.flatten(3), dim = (3,))
         x = torch.linalg.vector_norm(x, dim = (1,))
         return x
 
-class GPooling(nn.Module):
+class SE2Pooling(nn.Module):
     def __init__(self):
-        super(GPooling, self).__init__()
+        super(SE2Pooling, self).__init__()
 
     def forward(self, x):
         x, _ = torch.max(x.abs(), dim = 1)

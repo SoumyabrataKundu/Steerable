@@ -115,9 +115,11 @@ class SE3CGNonLinearity(nn.Module):
 
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.maxl = len(in_channels) - 1
-        size = [sum([int(abs(l1-l2) <= l<= l1+l2)  for l1 in range(self.maxl+1) for l2 in range(self.maxl+1)]) for l in range(self.maxl+1)]
+        
+        v = gelib.SO3vecArr.randn(1,[1], in_channels)
+        v = gelib.DiagCGproduct(v,v,self.maxl)
         self.weights = nn.ParameterList([nn.Parameter(
-                                        torch.randn(in_channels[l] * size[l], in_channels[l], dtype = torch.cfloat))
+                                        torch.randn(v.parts[l].shape[-1], in_channels[l], dtype = torch.cfloat))
                                          for l in range(self.maxl + 1)])
     def forward(self, x):
         x = gelib.DiagCGproduct(x,x,self.maxl)

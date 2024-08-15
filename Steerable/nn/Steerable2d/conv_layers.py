@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from math import sqrt, prod
+from numpy import sqrt, prod
 from Steerable.nn.Steerable2d.utils import get_Fint_matrix, get_CG_matrix
 
 #######################################################################################################################

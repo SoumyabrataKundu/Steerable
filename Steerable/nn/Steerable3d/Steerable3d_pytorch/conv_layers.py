@@ -102,6 +102,16 @@ class SE3Conv(nn.Module):
 #################################################### Non-linearity #####################################################
 ########################################################################################################################
 
+class SE3CGNonLinearity(nn.Module):
+    def __init__(self, in_channels):
+        super(SE3CGNonLinearity, self).__init__()
+
+        self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
+        self.maxl = len(in_channels) - 1
+
+    def forward(self, x):
+        raise NotImplementedError("SE3CGNonLinearity is not implemented for Pytorch Backend. Switch to GElib backend using 'Steerable.nn.set_backend('GElib')'")
+
 class SE3NormNonLinearity(nn.Module):
     def __init__(self, in_channels):
         super(SE3NormNonLinearity, self).__init__()

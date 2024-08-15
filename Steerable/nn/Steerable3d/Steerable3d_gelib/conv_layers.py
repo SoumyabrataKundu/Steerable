@@ -80,7 +80,7 @@ class SE3Conv(nn.Module):
             
             # Weight Multiplication
             for l, c in enumerate(self.out_channels):
-                result.parts.append((parts[..., l**2:(l+1)**2,:] @ self.weights[l]))
+                result.parts.append(parts[..., l**2:(l+1)**2,:] @ self.weights[l])
             
         else:
             kernel = self.get_kernel()

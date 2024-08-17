@@ -8,9 +8,8 @@ import h5py
 
 
 class HDF5Dataset:
-    def __init__(self, filename : str, datasets : dict, overwrite=False) -> None:
+    def __init__(self, filename : str, overwrite=False) -> None:
         self.filename = filename
-        self.datasets = datasets
         
         if not os.path.isfile(self.filename) or overwrite:
             self.create_hdf5_file()
@@ -19,25 +18,25 @@ class HDF5Dataset:
         
         
 
-    def create_hdf5_file(self):
-        image, target = self.datasets[list(self.datasets.keys())[0]][0]
+    def create_hdf5_file(self, datasets):
+        image, target = datasets[list(datasets.keys())[0]][0]
         image_shape, target_shape = image.shape, target.shape
         
         with h5py.File(self.filename, 'w') as f:
-            for mode in self.datasets:    
+            for mode in datasets:    
                 f.create_dataset(mode + '_inputs', (0, ) + image_shape, maxshape=(None,) +  image_shape, chunks=True)
                 f.create_dataset(mode + '_targets', (0,) + target_shape, maxshape=(None,) +  target_shape, chunks=True)
                 
         return
                 
 
-    def create_hdf5_dataset(self):
+    def create_hdf5_dataset(self, datasets):
         self.file = h5py.File(self.filename, 'a')
-        for mode in self.datasets:
+        for mode in datasets:
             print(f"Mode : {mode} ...")
-            dataset = self.datasets[mode]
+            dataset = datasets[mode]
             
-            if self.datasets[mode] is not None:
+            if datasets[mode] is not None:
                 for index in range(len(dataset)):
                     try:
                         image, target = dataset[index]

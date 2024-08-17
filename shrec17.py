@@ -6,7 +6,6 @@ import subprocess
 import random
 import sys
 
-sys.path.append()
 from Steerable.datasets import HDF5Dataset
 
 
@@ -32,20 +31,26 @@ class SHREC17(torch.utils.data.Dataset):
     def __getitem__(self, index):
         id, synsetId = self.data.iloc[index][['id', 'synsetId']]
         location = os.path.join(self.data_path, self.mode + ('_perturbed' if self.perturbed else ''), id + '.obj')
-        
-        tmpfile = '%030x.npy' % random.randrange(16**30)
-        command = ["obj2voxel", "--size", str(self.size), location, tmpfile]
-        subprocess.run(command)
-        image = np.load(tmpfile).astype(np.int8).reshape((1, *[self.size]*3))
+        image = torch.tensor(self.objtovoxel(location))
         target = torch.tensor(self.class_names.index(synsetId))
-        os.remove(tmpfile)
-
+        
         if self.image_transform is not None:
             image = self.image_transform(image)
         if self.target_transform is not None:
             target = self.target_transform(target)
 
         return image, target
+        
+        
+    def objtovoxel(self, location):
+        tmpfile = '%030x.npy' % random.randrange(16**30)
+        command = ["obj2voxel", "--size", str(self.size), location, tmpfile]
+        subprocess.run(command)
+        image = np.load(tmpfile).astype(np.int8).reshape((1, *[self.size]*3))
+        os.remove(tmpfile)
+        
+        return image
+
 
     def __len__(self):
         return self.n_samples
@@ -58,8 +63,8 @@ def get_datasets(data_path, size):
     return {'train':train_dataset, 'val':val_dataset, 'test':test_dataset}
 
 def main(data_path, size):
-    hdf5file = HDF5Dataset('SHREC17_perturbed64')
-    hdf5file.create_hdf5_dataset(get_datasets(data_path, size))
+    hdf5file = HDF5Dataset('SHREC17_perturbed64', get_datasets(data_path, size))
+    hdf5file.create_hdf5_dataset()
 
 
 if __name__== '__main__':

@@ -3,6 +3,9 @@ import numpy as np
 import h5py
 import os
 import fnmatch
+import sys
+
+sys.path.append('../../Steerable/')
 from Steerable.datasets.hdf5 import HDF5Dataset
 
 # Dataset Generation
@@ -15,14 +18,14 @@ class ModelNet10(torch.utils.data.Dataset):
         self.rotate = rotate
         self.rotate_z = rotate_z
         self.jitter = jitter
-        self.files = [f for f in os.listdir(data_path) if fnmatch.fnmatch(f, mode+'*.h5')]
+        self.files = [os.path.join(data_path, f) for f in os.listdir(data_path) if fnmatch.fnmatch(f, mode+'*.h5')]
         self.length = []
+
         for file in self.files:
             with h5py.File(file, 'r') as f:
-                self.length.append(len(f['labels']))
+                self.length.append(len(f['label']))
 
     def __getitem__(self, index):
-        
         indices, labels = self.get_indices(index)
         if self.rotate:
             indices = self.rotate_point_cloud_3d(indices)
@@ -43,8 +46,10 @@ class ModelNet10(torch.utils.data.Dataset):
         for file, length in zip(self.files, self.length):
             if index < running_sum + length:
                 with h5py.File(file, 'r+') as f:
-                    return f['data'][index - running_sum], f['labels'][running_sum-index]
+                    return f['data'][index - running_sum], f['label'][running_sum-index]
             running_sum += length
+        print('Hi')
+        print(index)
 
     def __len__(self):
         return sum(self.length)
@@ -89,9 +94,9 @@ class ModelNet10(torch.utils.data.Dataset):
 
 
 def main(data_path, size, rotate, rotate_z, jitter):
-    filename = 'ModelNet10' + + str(size) + '.hdf5'
+    filename = 'ModelNet10' + ('_rotate' if rotate else ('_rotate_z' if rotate_z else '')) + ('_jitter' if jitter else '') + str(size) + '.hdf5'
     hdf5file = HDF5Dataset(filename)
-    
+
     for mode in ['train', 'test']:
         dataset = ModelNet10(data_path=data_path, mode = mode, size=size, rotate=rotate, rotate_z=rotate_z, jitter=jitter)
         hdf5file.create_hdf5_dataset(mode, dataset)

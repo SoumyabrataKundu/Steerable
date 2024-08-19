@@ -15,6 +15,7 @@ class HDF5Dataset:
         if not os.path.isfile(self.filename) or self.overwrite:
             f = h5py.File(self.filename, 'w')
             f.close()
+            
         else:
             raise LookupError("File Already Exists! To overwrite it, set overwrite=True")
                 
@@ -35,18 +36,19 @@ class HDF5Dataset:
         input, target = dataset[0]
         self._initialize_hdf5_dataset(name, input.shape, target.shape)
         
-        for index, (input, target) in enumerate(dataset):
+        for index in range(len(dataset)):
             try:
+                input, target = dataset[index]
                 self._write_into_hdf5_file(name, input, target)
             except Exception as e:
                 print(f'Excpetion at {index + 1} : {e}')
                 
-            print(f"{index+1} / {len(dataset)}", end="\r")
+            print(f"Writing into {name} dataset : {index+1} / {len(dataset)}", end="\r")
+            
         print('Done')
         self.file.close()
         
         return
-
 
     def _write_into_hdf5_file(self, name : str, input, target):
         inputs = self.file[name + '_inputs']
@@ -60,8 +62,3 @@ class HDF5Dataset:
         targets[-1] = target
         
         return 
-
-
-
-                
-    

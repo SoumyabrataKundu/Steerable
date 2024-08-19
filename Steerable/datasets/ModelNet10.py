@@ -41,15 +41,16 @@ class ModelNet10(torch.utils.data.Dataset):
             
         return image, labels
 
-    def get_indices(self, index):
+
+    def get_indices(self, index):            
         running_sum=0
         for file, length in zip(self.files, self.length):
             if index < running_sum + length:
                 with h5py.File(file, 'r+') as f:
-                    return f['data'][index - running_sum], f['label'][running_sum-index]
+                    return f['data'][index - running_sum], f['label'][index - running_sum]
             running_sum += length
-        print('Hi')
-        print(index)
+            
+        raise IndexError('Index Out of Bounds.')
 
     def __len__(self):
         return sum(self.length)

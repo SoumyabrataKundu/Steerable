@@ -1,6 +1,6 @@
 import os
 import h5py
-
+import torch
 
 class HDF5Dataset:
     def __init__(self, filename : str, overwrite=False) -> None:
@@ -61,3 +61,33 @@ class HDF5Dataset:
         targets[-1] = target
         
         return 
+    
+    
+class HDF5(torch.utils.data.Dataset):
+    def __init__(self, file, mode = 'train', image_transform = None, target_transform = None) -> None:
+
+        if not mode in ["train", "test", "val"]:
+            raise ValueError("Invalid mode")
+
+        self.mode = mode
+        self.file = file
+        self.image_transform = image_transform
+        self.target_transform = target_transform
+
+    def __getitem__(self, index):
+
+        # Reading from file
+        input = torch.from_numpy(self.file[self.mode + '_inputs'][index]).float()
+        target = torch.tensor(self.file[self.mode + '_targets'][index]).long()
+
+        # Applying trasnformations
+        if self.image_transform is not None:
+            input = self.image_transform(input)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return input, target
+
+    def __len__(self):
+        return len(self.file[self.mode+'_targets'])

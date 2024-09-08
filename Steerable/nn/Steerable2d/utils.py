@@ -57,19 +57,25 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='c
     
     return Fint
 
-# def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='cubic'):
-#     R = (min(kernel_size)-1)/2
-#     r_values = (torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius]).type(torch.cfloat)
+def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='cubic'):
+    R = (min(kernel_size)-1)/2
+    r_values = (torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius])
 
-#     x_range = torch.arange(-kernel_size[0]/2, kernel_size[0]/2, 1) + 0.5  # Example range for x-coordinate
-#     y_range = torch.arange(-kernel_size[1]/2, kernel_size[1]/2, 1) + 0.5  # Example range for y-coordinate
-#     X, Y = torch.meshgrid(x_range, y_range, indexing='xy')
-#     theta = torch.arctan2(Y, X)
+    x_range = torch.arange(-kernel_size[0]/2, kernel_size[0]/2, 1) + 0.5  # Example range for x-coordinate
+    y_range = torch.arange(-kernel_size[1]/2, kernel_size[1]/2, 1) + 0.5  # Example range for y-coordinate
+    X, Y = torch.meshgrid(x_range, y_range, indexing='xy')
+    theta = torch.arctan2(Y, X)
+    norm = torch.sqrt(X**2 + Y**2).reshape(kernel_size[0], kernel_size[1])
+    tau_r = torch.exp(-((r_values.reshape(-1,1,1) - norm)/2) ** 2).type(torch.cfloat)
 
-#     Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
-#     Fint = torch.einsum('r, mxy-> mrxy', r_values, Fint)
-    
-#     return Fint
+    #Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
+    #Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
+
+    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, interpolation_type)
+    FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))
+    Fint = torch.einsum('rxy, mt, rtxy -> mrxy', tau_r, FT, I)
+
+    return Fint
 
 def get_CG_matrix(max_m):
     CG_Matrix = torch.tensor([[[(m1+m2-m)%max_m == 0 

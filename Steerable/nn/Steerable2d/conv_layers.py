@@ -304,6 +304,6 @@ class SE2Pooling(nn.Module):
         super(SE2Pooling, self).__init__()
 
     def forward(self, x):
-        x, _ = torch.max(x.abs(), dim = 1)
-        
+        x = torch.mean(x.flatten(3), dim = (3,))
+        x = torch.sum(x.abs(), dim = 1)
         return x

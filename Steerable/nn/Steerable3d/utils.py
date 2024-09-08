@@ -221,7 +221,6 @@ class InterpolateToSize:
         self.size = size
 
     def __call__(self, image):
-        # Resize the image using PyTorch's interpolate
-        resized_image = torch.nn.functional.interpolate(image, size=self.size, mode='trilinear', align_corners=False)
+        resized_image = torch.nn.functional.interpolate(image.unsqueeze(0), size=self.size, mode='trilinear', align_corners=False).squeeze(0)
 
         return resized_image

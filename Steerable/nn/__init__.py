@@ -5,6 +5,7 @@ from Steerable.nn.Steerable2d.utils import *
 from Steerable.nn.Steerable2d.transformer_layers import *
 from Steerable.nn.Steerable3d.utils import *
 from Steerable.nn.Steerable3d.Steerable3d_pytorch.conv_layers import *
+from Steerable.nn.Steerable3d.Steerable3d_pytorch.transformer_layers import *
 
 backend = 'Pytorch'
 def set_backend(set_to_backend : str):

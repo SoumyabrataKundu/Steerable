@@ -102,15 +102,28 @@ class SE3Conv(nn.Module):
 #################################################### Non-linearity #####################################################
 ########################################################################################################################
 
-class SE3CGNonLinearity(nn.Module):
-    def __init__(self, in_channels):
-        super(SE3CGNonLinearity, self).__init__()
+# import gelib
+# class SE3CGNonLinearity(nn.Module):
+#     def __init__(self, in_channels):
+#         super(SE3CGNonLinearity, self).__init__()
 
-        self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
-        self.maxl = len(in_channels) - 1
-
-    def forward(self, x):
-        raise NotImplementedError("SE3CGNonLinearity is not implemented for Pytorch Backend. Switch to GElib backend using 'Steerable.nn.set_backend('GElib')'")
+#         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
+#         self.maxl = len(in_channels) - 1
+        
+#         size = [sum([int(abs(l1-l2) <= l<= l1+l2)  for l1 in range(self.maxl+1) for l2 in range(self.maxl+1)]) for l in range(self.maxl+1)]
+#         hidden_dim = min(in_channels)
+#         self.weights1 = nn.ParameterList([nn.Parameter(
+#                                         torch.randn(in_channels[l], hidden_dim, dtype = torch.cfloat))
+#                                          for l in range(self.maxl + 1)])
+#         self.weights2 = nn.ParameterList([nn.Parameter(
+#                                         torch.randn(hidden_dim * size[l], in_channels[l], dtype = torch.cfloat))
+#                                          for l in range(self.maxl + 1)])
+#     def forward(self, x):
+#         inputs = gelib.SO3vecArr()
+#         inputs.parts = [x[l].permute(0,3,4,5,1,2) @ self.weights1 for l in range(self.maxl+1)]
+#         inputs = gelib.DiagCGproduct(inputs,inputs,self.maxl)
+#         result = [(inputs.parts[l] @ self.weights2[l]).permute(0,4,5,1,2,3) for l in range(self.maxl+1)]
+#         return result
 
 class SE3NormNonLinearity(nn.Module):
     def __init__(self, in_channels):

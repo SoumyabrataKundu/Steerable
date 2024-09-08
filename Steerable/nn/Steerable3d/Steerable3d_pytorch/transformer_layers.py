@@ -49,14 +49,14 @@ class SE3MultiSelfAttention(nn.Module):
         for l in range(self.maxl+1):
             
             # Embeddings
-            E = (self.embeddings @ x[l].flatten(3))
+            E = (self.embeddings[l] @ x[l].flatten(3))
             E = E.reshape(3, x_shape[0], (2*l+1), self.n_head, self.query_dim[l], -1).transpose(2,3).flatten(3,4)
             Q, K = torch.conj(E[0].transpose(-2,-1)), E[1]
             B.append(E[2])
 
             # Attention Scores
             if self.add_pos_enc:
-                pos =  (Q.unsqueeze(-2) @ (self.encoding * self.pos_encod[l]).flatten(2,3)).squeeze(-2)
+                pos =  (Q.unsqueeze(-2) @ (self.encoding[l] * self.pos_encod[l]).flatten(2,3)).squeeze(-2)
                 A = A + (Q @ K + pos) / sqrt(self.query_dim[l])
             else:
                 A = A + (Q @ K) / sqrt(self.query_dim[l])

@@ -12,7 +12,7 @@ class _SE2Conv(nn.Module):
     SE(2) Convolution Base Class.
     '''
     def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
-                 interpolation_type='linear',dilation=1, padding=0, stride=1, conv_first=True):
+                 interpolation_type='linear',dilation=1, padding=0, stride=1, conv_first=False):
         super(_SE2Conv, self).__init__()
 
         # Layer Design
@@ -76,7 +76,7 @@ class SE2ConvType1(_SE2Conv):
     SE(2) Convolution in first Layer.
     '''
     def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
-                 interpolation_type='linear', dilation=1, padding=0, stride=1, conv_first=True):
+                 interpolation_type='linear', dilation=1, padding=0, stride=1, conv_first=False):
         super(SE2ConvType1, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
                                            n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
                                            interpolation_type=interpolation_type,
@@ -97,7 +97,7 @@ class SE2ConvType2(_SE2Conv):
     SE(2) Convolution in higher Layer.
     '''
     def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
-                 interpolation_type='linear',  dilation=1, padding=0, stride=1, restricted=False, conv_first=True) -> None:
+                 interpolation_type='linear',  dilation=1, padding=0, stride=1, restricted=False, conv_first=False) -> None:
         super(SE2ConvType2, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
                                            n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
                                            interpolation_type=interpolation_type,

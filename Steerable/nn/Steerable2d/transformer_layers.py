@@ -173,7 +173,22 @@ class SE2ClassEmbeddings(nn.Module):
         x = torch.einsum('bmeXY, bmeC -> bCXY', x, torch.conj(classes))
         
         return x
-    
+   
+
+class SE2ClassEmbeddings(nn.Module):
+    def __init__(self, transformer_dim, embedding_dim, max_m):
+        super(SE2ClassEmbeddings, self).__init__()
+
+        self.weights = nn.Parameter(torch.randn(embedding_dim, transformer_dim, dtype=torch.float))
+        self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
+                           for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
+
+    def forward(self, x, classes):
+        C = self.C.to(classes.device)
+        classes = self.weights.type(torch.cfloat) @ classes
+        x = torch.einsum('lmn, bmeXY, bneC -> blCXY', C, x, classes)
+
+        return x 
     
 #######################################################################################################################
 ############################################# SE(2) Linear Decoder ####################################################

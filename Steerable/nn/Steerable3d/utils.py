@@ -177,9 +177,9 @@ def split_channel_dim(x, channels, channel_last=False):
     
 def get_pos_encod(kernel_size, maxl):
     # Define the range for each dimension
-    x_range = torch.arange(0, kernel_size, 1)  # Example range for x-coordinate
-    y_range = torch.arange(0, kernel_size, 1)  # Example range for y-coordinate
-    z_range = torch.arange(0, kernel_size, 1)  # Example range for z-coordinate
+    x_range = torch.arange(0, kernel_size[0], 1)  # Example range for x-coordinate
+    y_range = torch.arange(0, kernel_size[1], 1)  # Example range for y-coordinate
+    z_range = torch.arange(0, kernel_size[2], 1)  # Example range for z-coordinate
 
     # Create the mesh grid
     X, Y, Z = torch.meshgrid(x_range, y_range, z_range, indexing='ij')

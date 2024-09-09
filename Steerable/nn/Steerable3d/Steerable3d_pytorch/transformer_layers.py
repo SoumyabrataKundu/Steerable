@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from math import prod, sqrt
+from numpy import prod, sqrt
 from Steerable.nn.Steerable3d.Steerable3d_pytorch.conv_layers import SE3BatchNorm, SE3NormNonLinearity
 from Steerable.nn.Steerable3d.utils import merge_channel_dim, get_pos_encod
 

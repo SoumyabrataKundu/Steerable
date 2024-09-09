@@ -211,16 +211,3 @@ def get_pos_encod(kernel_size, maxl):
 
     return result
 
-
-######################################################################################################################
-############################################ Interpolate To Size #####################################################
-######################################################################################################################
-
-class InterpolateToSize:
-    def __init__(self, size):
-        self.size = size
-
-    def __call__(self, image):
-        resized_image = torch.nn.functional.interpolate(image.unsqueeze(0), size=self.size, mode='trilinear', align_corners=False).squeeze(0)
-
-        return resized_image

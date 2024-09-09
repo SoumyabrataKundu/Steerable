@@ -26,7 +26,10 @@ class SE3MultiSelfAttention(nn.Module):
         self.embeddings = nn.ParameterList([nn.Parameter(
                                         torch.randn(3, 1, 1, dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
-        self.encoding = nn.ParameterList([nn.Parameter(
+        self.encoding1 = nn.ParameterList([nn.Parameter(
+                                        torch.randn(n_head, 1, 1, dim, 1, dtype = torch.cfloat))
+                                        for dim in self.query_dim])
+        self.encoding2 = nn.ParameterList([nn.Parameter(
                                         torch.randn(n_head, 1, 1, dim, 1, dtype = torch.cfloat))
                                         for dim in self.query_dim])
         self.out = nn.ParameterList([nn.Parameter(
@@ -40,7 +43,7 @@ class SE3MultiSelfAttention(nn.Module):
         x_shape = x[0].shape
         
         if self.pos_encod is None and self.add_pos_enc:
-            self.pos_encod = get_pos_encod(x_shape[-1], self.maxl)
+            self.pos_encod = get_pos_encod(x_shape[-3:], self.maxl)
             self.pos_encod = [part.to(x[0].device) for part in self.pos_encod]
 
         # Query Key Pair
@@ -56,8 +59,8 @@ class SE3MultiSelfAttention(nn.Module):
 
             # Attention Scores
             if self.add_pos_enc:
-                pos =  (Q.unsqueeze(-2) @ (self.encoding[l] * self.pos_encod[l]).flatten(2,3)).squeeze(-2)
-                A = A + (Q @ K + pos) / sqrt(self.query_dim[l])
+                pos1 = (self.encoding1[l] * self.pos_encod[l]).flatten(2,3)
+                A = A + (Q @ K + (Q.unsqueeze(-2) @ pos1).squeeze(-2)) / sqrt(self.query_dim[l])
             else:
                 A = A + (Q @ K) / sqrt(self.query_dim[l])
             
@@ -67,6 +70,9 @@ class SE3MultiSelfAttention(nn.Module):
         result = []
         for l in range(self.maxl+1):
             V = B[l] @ A.transpose(-2,-1)
+            if self.add_pos_enc:
+                pos2 = (self.encoding2[l] * self.pos_encod[l]).flatten(2,3)
+                V = V + (pos2 @ A.unsqueeze(-1)).squeeze(-1).transpose(-2,-1)
             V = self.out[l] @ V.reshape(x_shape[0], self.n_head, 2*l+1, self.query_dim[l], -1).transpose(1,2).flatten(2,3)
             result.append(V.reshape(x_shape[0], 2*l+1, self.transformer_dim[l], *x_shape[3:]))
 

@@ -28,6 +28,9 @@ class SE2MultiSelfAttention(nn.Module):
         self.pos_enc = None
 
     def forward(self, x):
+        x_shape = x.shape
+        x = x.flatten(3) # shape : batch x max_m x channel x N
+        
         # Query, Key and Value Embeddings
         E = (self.embeddings.type(torch.cfloat) @ x.unsqueeze(2))
         Q, K, V = torch.conj(E[0].transpose(-2,-1)), E[1], E[2]
@@ -55,6 +58,7 @@ class SE2MultiSelfAttention(nn.Module):
         
         # Mixing Heads
         result = self.out.type(torch.cfloat) @ result.flatten(2,3)
+        result = result.reshape(*x_shape)
 
         return result
 
@@ -77,10 +81,14 @@ class PositionwiseFeedforward(nn.Module):
         self.nonlinearity = SE2NormNonLinearity(hidden_dim, max_m)
 
     def forward(self, x):
+        x_shape = x.shape
+        x = x.flatten(3) # shape : batch x max_m x channel x N
 
         x = self.weights1.type(torch.cfloat) @ x
         x = self.nonlinearity(x)
         x = self.weights2.type(torch.cfloat) @ x
+        
+        x = x.reshape(*x_shape)
         return x   
 
 #######################################################################################################################
@@ -118,11 +126,7 @@ class SE2TransformerEncoder(nn.Module):
         )
 
     def forward(self, x):
-        x_shape = x.shape
-        x = x.flatten(3) # shape : batch x max_m x channel x N
         x = self.transformer_encoder(x)
-        x = x.reshape(*x_shape)
-        
         return x
     
 #######################################################################################################################

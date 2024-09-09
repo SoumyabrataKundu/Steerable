@@ -41,8 +41,7 @@ class SE2MultiSelfAttention(nn.Module):
         # Positional Encoding
         if self.add_pos_enc:
             if self.pos_enc ==  None:
-                kernel_size = int(sqrt(x.shape[-1]))
-                self.pos_enc = get_pos_encod((kernel_size, kernel_size), self.max_m).to(Q.device)
+                self.pos_enc = get_pos_encod(x_shape[-2:], self.max_m).to(Q.device)
                 
             pos = (self.encoding.type(torch.cfloat) * self.pos_enc)
             A = A + (Q.unsqueeze(-2) @ pos[0]).squeeze(-2)
@@ -152,7 +151,15 @@ class SE2TransformerDecoder(nn.Module):
         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
                            for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
 
+        self.pos_enc = None
     def forward(self, x):
+        if self.pos_enc == None:
+            pos = get_pos_encod(x.shape[-2:], self.max_m).to(x.device)
+            self.pos_enc = torch.zeros(self.max_m, 1, pos.shape[2]+self.n_classes, 1, pos.shape[4]+self.n_classes, dtype=torch.cfloat, device=x.device)
+            self.pos_enc[:,:,:pos.shape[2],:,:pos.shape[4]] = pos
+            for module in self.transformer_encoder:
+                module.multihead_attention.pos_enc = self.pos_enc
+        
         x_shape = x.shape
         pad = torch.zeros(x_shape[0], self.max_m-1, self.transformer_dim, self.n_classes, 
                           dtype=torch.cfloat, device=self.class_embed.device)

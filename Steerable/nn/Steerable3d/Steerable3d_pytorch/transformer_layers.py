@@ -39,7 +39,6 @@ class SE3MultiSelfAttention(nn.Module):
         self.pos_encod = None
         
     def forward(self, x):
-
         x_shape = x[0].shape
         
         if self.pos_encod is None and self.add_pos_enc:
@@ -73,6 +72,7 @@ class SE3MultiSelfAttention(nn.Module):
             if self.add_pos_enc:
                 pos2 = (self.encoding2[l] * self.pos_encod[l]).flatten(2,3)
                 V = V + (pos2 @ A.unsqueeze(-1)).squeeze(-1).transpose(-2,-1)
+                
             V = self.out[l] @ V.reshape(x_shape[0], self.n_head, 2*l+1, self.query_dim[l], -1).transpose(1,2).flatten(2,3)
             result.append(V.reshape(x_shape[0], 2*l+1, self.transformer_dim[l], *x_shape[3:]))
 
@@ -151,21 +151,32 @@ class SE3TransformerEncoder(nn.Module):
 ####################################################################################################################### 
 
 class SE3TransformerDecoder(nn.Module):
-    def __init__(self, transformer_dim, n_head, n_classes, n_layers, add_pos_enc=False):
+    def __init__(self, transformer_dim, n_head, n_classes, n_layers, add_pos_enc=True):
         super(SE3TransformerDecoder, self).__init__()
 
         self.transformer_dim = transformer_dim
         self.n_classes = n_classes
-        
-        self.transformer_encoder = torch.nn.Sequential(
-            *[SE3Transformer(transformer_dim, n_head, transformer_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
+        self.maxl = len(self.transformer_dim) - 1
+        self.transformer_encoder = torch.nn.ModuleList(
+            [SE3Transformer(transformer_dim, n_head, transformer_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
         )
 
         self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim[0], n_classes, dtype=torch.cfloat))
-
+        self.pos_encod = None
         self.norm = SE3BatchNorm()
         
     def forward(self, x):
+        if self.pos_encod == None:
+            pos = get_pos_encod(x[0].shape[-3:], self.maxl)
+            pos = [part.to(x[0].device) for part in pos]
+            self.pos_encod = [torch.zeros(part.shape[0]+self.n_classes, part.shape[1], 1, part.shape[3]+self.n_classes, 
+                                          dtype=torch.cfloat, device=x[0].device) for part in pos]
+            for l in range(len(pos)):
+                self.pos_encod[l][:pos[l].shape[0], :,:,:pos[l].shape[3]] = pos[l]
+            for module in self.transformer_encoder:
+                module.multihead_attention.pos_encod = self.pos_encod
+                
+        
         result = []
         x_shape = x[0].shape
         for l, part in enumerate(x):
@@ -175,8 +186,10 @@ class SE3TransformerDecoder(nn.Module):
                 class_embed = torch.zeros(*part.shape[:3], self.n_classes, dtype=torch.cfloat, device=part.device)
             
             result.append(torch.cat([part.flatten(3), class_embed], dim=-1))
-                
-        result = self.norm(self.transformer_encoder(result))
+        
+        for module in self.transformer_encoder:
+            result = module(result)
+        result = self.norm(result)
         
         patches, cls_seg_feat = [], []
         for l, part in enumerate(result):
@@ -190,8 +203,13 @@ class SE3ClassEmbedings(nn.Module):
     def __init__(self, transformer_dim, embedding_dim):
         super(SE3ClassEmbedings, self).__init__()
         
+        self.transformer_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
+        self.embedding_dim = [embedding_dim] if type(embedding_dim) is not list and type(embedding_dim) is not tuple else embedding_dim
+        
+        assert len(self.transformer_dim) == len(self.embedding_dim)
+        
         self.weight = nn.ParameterList([
-            nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(embedding_dim, transformer_dim)
+            nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(self.embedding_dim, self.transformer_dim)
         ])
         
         
@@ -211,9 +229,14 @@ class SE3ClassEmbedings(nn.Module):
 class SE3LinearDecoder(nn.Module):
     def __init__(self, transformer_dim, decoder_dim):
         super(SE3LinearDecoder, self).__init__()
+        
+        self.transformer_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
+        self.decoder_dim = [decoder_dim] if type(decoder_dim) is not list and type(decoder_dim) is not tuple else decoder_dim
+        
+        assert len(self.transformer_dim) == len(self.decoder_dim)
 
         self.class_emb = nn.ParameterList([
-            nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(decoder_dim, transformer_dim)])
+            nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(self.decoder_dim, self.transformer_dim)])
         
         self.norm = SE3BatchNorm()
 

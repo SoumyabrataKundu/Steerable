@@ -181,8 +181,7 @@ class SE2ClassEmbeddings(nn.Module):
         
     def forward(self, x, classes):
         classes = (self.weight.type(torch.cfloat) @ classes).flatten(1,2)
-        x = x.flatten(1,2).flatten(2)
-        result = torch.conj(classes).transpose(-2,-1) @ x
+        result = torch.conj(classes).transpose(-2,-1) @ x.flatten(1,2).flatten(2)
         result = result.reshape(x.shape[0], classes.shape[-1], *x.shape[-2:])
         #x = torch.einsum('bmeXY, bmeC -> bCXY', x, torch.conj(classes))
         

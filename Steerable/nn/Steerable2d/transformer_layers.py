@@ -180,26 +180,29 @@ class SE2ClassEmbeddings(nn.Module):
         self.weight = nn.Parameter(torch.randn(max_m, embedding_dim, transformer_dim, dtype=torch.float))
         
     def forward(self, x, classes):
-        classes = self.weight.type(torch.cfloat) @ classes
-        x = torch.einsum('bmeXY, bmeC -> bCXY', x, torch.conj(classes))
+        classes = (self.weight.type(torch.cfloat) @ classes).flatten(1,2)
+        x = x.flatten(1,2).flatten(2)
+        result = torch.conj(classes).transpose(-2,-1) @ x
+        result = result.reshape(x.shape[0], classes.shape[-1], *x.shape[-2:])
+        #x = torch.einsum('bmeXY, bmeC -> bCXY', x, torch.conj(classes))
         
-        return x
+        return result
    
 
-class SE2ClassEmbeddings(nn.Module):
-    def __init__(self, transformer_dim, embedding_dim, max_m):
-        super(SE2ClassEmbeddings, self).__init__()
+# class SE2ClassEmbeddings(nn.Module):
+#     def __init__(self, transformer_dim, embedding_dim, max_m):
+#         super(SE2ClassEmbeddings, self).__init__()
 
-        self.weights = nn.Parameter(torch.randn(embedding_dim, transformer_dim, dtype=torch.float))
-        self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
-                           for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
+#         self.weights = nn.Parameter(torch.randn(embedding_dim, transformer_dim, dtype=torch.float))
+#         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
+#                            for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
 
-    def forward(self, x, classes):
-        C = self.C.to(classes.device)
-        classes = self.weights.type(torch.cfloat) @ classes
-        x = torch.einsum('lmn, bmeXY, bneC -> blCXY', C, x, classes)
+#     def forward(self, x, classes):
+#         C = self.C.to(classes.device)
+#         classes = self.weights.type(torch.cfloat) @ classes
+#         x = torch.einsum('lmn, bmeXY, bneC -> blCXY', C, x, classes)
 
-        return x 
+#         return x 
     
 #######################################################################################################################
 ############################################# SE(2) Linear Decoder ####################################################

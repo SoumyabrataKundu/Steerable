@@ -120,7 +120,7 @@ class SE3CGNonLinearity(nn.Module):
                                          for l in range(self.maxl + 1)])
     def forward(self, x):
         inputs = gelib.SO3vecArr()
-        inputs.parts = [x[l].permute(0,3,4,5,1,2) @ self.weights1 for l in range(self.maxl+1)]
+        inputs.parts = [x[l].permute(0,3,4,5,1,2) @ self.weights1[l] for l in range(self.maxl+1)]
         inputs = gelib.DiagCGproduct(inputs,inputs,self.maxl)
         result = [(inputs.parts[l] @ self.weights2[l]).permute(0,4,5,1,2,3) for l in range(self.maxl+1)]
         return result

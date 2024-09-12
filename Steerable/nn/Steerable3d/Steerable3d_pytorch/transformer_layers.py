@@ -108,7 +108,7 @@ class SE3MultiSelfAttention(nn.Module):
         V = V @ A.transpose(-2,-1)
         if self.add_pos_enc:
             V = V + (pos[1] @ A.unsqueeze(-1)).squeeze(-1).transpose(-2,-1)
-        V = split_channel_dim(V.transpose(1,2), self.transformer_dim)
+        V = split_channel_dim(V.transpose(1,2), self.query_dim)
         
         # Output
         result = [(self.out[l] @ V[l].reshape(x_shape[0], 2*l+1, self.transformer_dim[l], -1)).reshape(*x[l].shape)

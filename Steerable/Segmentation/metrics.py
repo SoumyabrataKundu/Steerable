@@ -3,8 +3,8 @@ import torch
 
 class Metrics:
     def __init__(self, num_classes):
-        self.num_classes = num_classes if num_classes > 1 else 2
-        self.confusion = torch.zeros(num_classes, num_classes)
+        self.num_classes = num_classes
+        self.confusion = torch.zeros(self.num_classes, self.num_classes)
     
     #####################################################################################################
     ####################################### Confusion Matrix ############################################

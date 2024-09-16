@@ -23,7 +23,7 @@ class SE3Conv(nn.Module):
         self.kernel_size = (kernel_size, kernel_size, kernel_size) if type(kernel_size) is not tuple else kernel_size
         self.dilation = (dilation, dilation, dilation) if type(kernel_size) is not tuple else dilation
         self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding, padding)
-        self.stride = (stride, stride, stride) if type(kernel_size) is not tuple else stride
+        self.stride = (stride, stride, stride) if type(stride) is not tuple else stride
 
         self.n_radius = n_radius
         self.n_theta = n_theta

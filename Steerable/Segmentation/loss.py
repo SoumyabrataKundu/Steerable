@@ -150,7 +150,7 @@ class FocalLoss(nn.Module):
     def forward(self, preds, truth):
         ce_loss = torch.nn.functional.cross_entropy(preds, truth, reduction='none')
         pt = torch.exp(-ce_loss)
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        focal_loss = self.alpha * ((1 - pt) ** self.gamma) * ce_loss
         return focal_loss.mean()
     
 class BinaryFocalLoss(nn.Module):
@@ -160,9 +160,8 @@ class BinaryFocalLoss(nn.Module):
         self.gamma = gamma
 
     def forward(self, preds, truth):
-        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(preds, truth.float(), reduction='none')
-        pt = torch.exp(-ce_loss)
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(preds.squeeze(1), truth.float(), reduction='none')
+        focal_loss = self.alpha * ((1 - torch.exp(-ce_loss)) ** self.gamma) * ce_loss
         return focal_loss.mean()
     
     

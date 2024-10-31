@@ -1,6 +1,7 @@
 import torch
 from math import floor, pi
 from scipy.ndimage.interpolation import rotate
+from scipy.interpolate import RectBivariateSpline
 from math import sqrt
 
 #######################################################################################################################
@@ -8,36 +9,62 @@ from math import sqrt
 #######################################################################################################################
 
 
-def get_interpolation_matrix(kernel_size, n_radius, n_phi, interpolation_type="cubic"):
-    R = (kernel_size[0]-1)/2
-    r_values = torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius]
-    phi_values = torch.arange(0, 2 * pi, 2 * pi / n_phi)
-    I = torch.zeros(n_radius, n_phi, kernel_size[0], kernel_size[1], dtype=torch.cfloat)
-    x_new = torch.tensordot(r_values, torch.cos(phi_values), dims=0) + R
-    y_new = torch.tensordot(r_values, torch.sin(phi_values), dims=0) + R
+# def get_interpolation_matrix(kernel_size, n_radius, n_phi, interpolation_type="cubic"):
+#     R = (kernel_size[0]-1)/2
+#     r_values = torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius]
+#     phi_values = torch.arange(0, 2 * pi, 2 * pi / n_phi)
+#     I = torch.zeros(n_radius, n_phi, kernel_size[0], kernel_size[1], dtype=torch.cfloat)
+#     x_new = torch.tensordot(r_values, torch.cos(phi_values), dims=0) + R
+#     y_new = torch.tensordot(r_values, torch.sin(phi_values), dims=0) + R
 
-    def w(x,y):
-        if interpolation_type == "nearest":
-            return float(x>= 0.5) * float(y>=0.5)
+#     def w(x,y):
+#         if interpolation_type == "nearest":
+#             return float(x>= 0.5) * float(y>=0.5)
 
-        if interpolation_type == "linear":
-            return x*y
+#         if interpolation_type == "linear":
+#             return x*y
 
-        if interpolation_type == "cubic":
-            return x*x*y*y*(9 - 6*x - 6*y + 4*x*y)
+#         if interpolation_type == "cubic":
+#             return x*x*y*y*(9 - 6*x - 6*y + 4*x*y)
 
+#     for r in range(n_radius):
+#         for phi in range(n_phi):
+#             integer_x, fraction_x = floor(x_new[r, phi]), x_new[r, phi] - floor(x_new[r, phi])
+#             integer_y, fraction_y = floor(y_new[r, phi]), y_new[r, phi] - floor(y_new[r, phi])
+
+#             I[r, phi, integer_x, integer_y] = w(1-fraction_x, 1-fraction_y)
+#             I[r, phi, integer_x + 1, integer_y] = w(fraction_x, 1-fraction_y)
+#             I[r, phi, integer_x, integer_y + 1] = w(1 - fraction_x, fraction_y)
+#             I[r, phi, integer_x + 1, integer_y + 1] = w(fraction_x, fraction_y)
+
+# #    I = I/torch.sum(I, dims = (2,3), keepdim = True)
+#     return(I)
+
+
+def get_interpolation_matrix(kernel_size, n_radius, n_theta, k=1):
+    R1 = (kernel_size[0]-1)/2
+    R2 = (kernel_size[1]-1)/2
+    r1_values = torch.arange(R1/(n_radius+1), R1, R1/(n_radius+1))[:n_radius]
+    r2_values = torch.arange(R2/(n_radius+1), R2, R2/(n_radius+1))[:n_radius]
+    phi_values = torch.arange(0, 2 * pi, 2 * pi / n_theta)
+    
+    x1_values = torch.tensordot(r1_values, torch.cos(phi_values), dims=0) + R1
+    x2_values = torch.tensordot(r2_values, torch.sin(phi_values), dims=0) + R2
+    kernel1 = torch.arange(0, kernel_size[0], 1)
+    kernel2 = torch.arange(0, kernel_size[1], 1)
+    
+    I = torch.zeros(n_radius, n_theta, kernel_size[0], kernel_size[1])
     for r in range(n_radius):
-        for phi in range(n_phi):
-            integer_x, fraction_x = floor(x_new[r, phi]), x_new[r, phi] - floor(x_new[r, phi])
-            integer_y, fraction_y = floor(y_new[r, phi]), y_new[r, phi] - floor(y_new[r, phi])
-
-            I[r, phi, integer_x, integer_y] = w(1-fraction_x, 1-fraction_y)
-            I[r, phi, integer_x + 1, integer_y] = w(fraction_x, 1-fraction_y)
-            I[r, phi, integer_x, integer_y + 1] = w(1 - fraction_x, fraction_y)
-            I[r, phi, integer_x + 1, integer_y + 1] = w(fraction_x, fraction_y)
-
-#    I = I/torch.sum(I, dims = (2,3), keepdim = True)
-    return(I)
+        for theta in range(n_theta):
+            for y1 in kernel1:
+                for y2 in kernel2:
+                    f = torch.zeros((len(kernel1), len(kernel2)))
+                    f[y1,y2] = 1
+                    spline = RectBivariateSpline(kernel1, kernel2, f, kx=k, ky=k)
+                    I[r,theta, y1, y2] = spline(x1_values[r,theta], x2_values[r,theta])[0, 0]
+    
+    return I
+    
 
 #######################################################################################################################
 ################################################# Fint Matrix #########################################################
@@ -57,25 +84,25 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='c
     
     return Fint
 
-def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='cubic'):
-    R = (min(kernel_size)-1)/2
-    r_values = (torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius])
+# def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='cubic'):
+#     R = (min(kernel_size)-1)/2
+#     r_values = (torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius])
 
-    x_range = torch.arange(-kernel_size[0]/2, kernel_size[0]/2, 1) + 0.5  # Example range for x-coordinate
-    y_range = torch.arange(-kernel_size[1]/2, kernel_size[1]/2, 1) + 0.5  # Example range for y-coordinate
-    X, Y = torch.meshgrid(x_range, y_range, indexing='xy')
-    theta = torch.arctan2(Y, X)
-    norm = torch.sqrt(X**2 + Y**2).reshape(kernel_size[0], kernel_size[1])
-    tau_r = torch.exp(-((r_values.reshape(-1,1,1) - norm)/2) ** 2).type(torch.cfloat)
+#     x_range = torch.arange(-kernel_size[0]/2, kernel_size[0]/2, 1) + 0.5  # Example range for x-coordinate
+#     y_range = torch.arange(-kernel_size[1]/2, kernel_size[1]/2, 1) + 0.5  # Example range for y-coordinate
+#     X, Y = torch.meshgrid(x_range, y_range, indexing='xy')
+#     theta = torch.arctan2(Y, X)
+#     norm = torch.sqrt(X**2 + Y**2).reshape(kernel_size[0], kernel_size[1])
+#     tau_r = torch.exp(-((r_values.reshape(-1,1,1) - norm)/2) ** 2).type(torch.cfloat)
 
-    #Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
-    #Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
+#     #Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
+#     #Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
 
-    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, interpolation_type)
-    FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))
-    Fint = torch.einsum('rxy, mt, rtxy -> mrxy', tau_r, FT, I)
+#     I = get_interpolation_matrix(kernel_size, n_radius, n_theta, interpolation_type)
+#     FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))
+#     Fint = torch.einsum('rxy, mt, rtxy -> mrxy', tau_r, FT, I)
 
-    return Fint
+#     return Fint
 
 def get_CG_matrix(max_m):
     CG_Matrix = torch.tensor([[[(m1+m2-m)%max_m == 0 

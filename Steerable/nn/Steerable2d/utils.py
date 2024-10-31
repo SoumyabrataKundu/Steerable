@@ -63,19 +63,19 @@ def get_interpolation_matrix(kernel_size, n_radius, n_theta, k=1):
                     spline = RectBivariateSpline(kernel1, kernel2, f, kx=k, ky=k)
                     I[r,theta, y1, y2] = spline(x1_values[r,theta], x2_values[r,theta])[0, 0]
     
-    return I
+    return I.type(torch.cfloat)
     
 
 #######################################################################################################################
 ################################################# Fint Matrix #########################################################
 #######################################################################################################################
 
-def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type='cubic'):
+def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1):
     R = (kernel_size[0]-1)/2
     r_values = (torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius]).type(torch.cfloat)
     
     # Interpolation
-    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, interpolation_type)
+    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, 1)
     
     # Fourier Transform Matrix
     FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))

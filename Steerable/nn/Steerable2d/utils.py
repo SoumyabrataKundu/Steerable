@@ -71,16 +71,18 @@ def get_interpolation_matrix(kernel_size, n_radius, n_theta, k=1):
 #######################################################################################################################
 
 def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1):
-    R = (kernel_size[0]-1)/2
-    r_values = (torch.arange(R/(n_radius+1), R, R/(n_radius+1))[:n_radius]).type(torch.cfloat)
+    R1 = (kernel_size[0]-1)/2
+    R2 = (kernel_size[1]-1)/2
+    r1_values = (torch.arange(R1/(n_radius+1), R1, R1/(n_radius+1))[:n_radius]).type(torch.cfloat)
+    r2_values = (torch.arange(R2/(n_radius+1), R2, R2/(n_radius+1))[:n_radius]).type(torch.cfloat)
     
     # Interpolation
-    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, 1)
+    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(kernel_size)-1)
     
     # Fourier Transform Matrix
     FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))
     
-    Fint = torch.einsum('r, mt, rtxy -> mrxy', r_values, FT, I)
+    Fint = torch.einsum('r, mt, rtxy -> mrxy', torch.sqrt(r1_values*r2_values), FT, I)
     
     return Fint
 

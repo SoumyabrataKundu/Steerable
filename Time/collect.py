@@ -18,7 +18,7 @@ def main():
     n_radius = list(np.unique(n_radius))
     max_m = list(np.unique(max_m))
 
-    times = np.zeros(len(channels), len(kernels), len(n_radius), len(max_m), 2, 2, 3)
+    times = np.zeros((len(channels), len(kernels), len(n_radius), len(max_m), 2, 2, 2))
     for i,channel in enumerate(channels):
         for j,kernel in enumerate(kernels):
             for x,r in enumerate(n_radius):
@@ -28,7 +28,7 @@ def main():
                             with open(f"./log/times_{channel}_{kernel}_{r}_{k}_{restricted}_{conv_first}.pkl", 'rb') as file:
                                 t = pickle.load(file)
                                 times[i, j, x, y, int(restricted), int(conv_first), 0] = np.mean(t)
-                                times[i, j, x, y, int(restricted), int(conv_first), 2] = np.std(t)
+                                times[i, j, x, y, int(restricted), int(conv_first), 1] = np.std(t)
                                 
     with open("times.pkl", 'wb') as file:  
         pickle.dump(times, file) 

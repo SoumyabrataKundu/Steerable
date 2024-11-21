@@ -77,7 +77,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1)
     r2_values = (torch.arange(R2/(n_radius+1), R2, R2/(n_radius+1))[:n_radius]).type(torch.cfloat)
     
     # Interpolation
-    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(5, min(kernel_size)-1))
+    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(interpolation_type, min(kernel_size)-1))
     
     # Fourier Transform Matrix
     FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))

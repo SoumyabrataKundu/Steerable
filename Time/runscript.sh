@@ -1,7 +1,7 @@
 
-channels=(8)
-kernels=(5)
-n_radius=(2)
+channels=(64) #(2 4 8 16 32 64)
+kernels=(2 3 4 5)
+n_radius=(2 4 6 8)
 max_m=(4 8 12 16)
 restricted=(0 1)
 conv_first=(0 1)
@@ -32,12 +32,20 @@ do
                         sed -i "s/RESTRICTED/${restrict}/g" script_temp.sh
                         sed -i "s/CONVFIRST/${conv}/g" script_temp.sh
 
-                        sbatch script_temp.sh
+                        JOB_ID=$(sbatch script_temp.sh | awk '{print $NF}')
                         rm script_temp.sh
 
                     done
                 done
+                echo "Submitted Job -- Channel : ${channel}  Kernel : ${kernel}  Radius : ${radius}  Cutoff : ${k}"
+
             done
+            while squeue -j "$JOB_ID"| grep "$JOB_ID" > /dev/null 2>&1; do
+                sleep 10
+            done
+            echo 
+
         done
     done
 done
+

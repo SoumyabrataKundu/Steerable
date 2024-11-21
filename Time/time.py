@@ -24,7 +24,7 @@ device = 'cuda'
 def time_compare(channel, kernel, n_radius, max_m, restricted, conv_first):
     times = []
     resolution = 28
-    batch_size = 10
+    batch_size = 3
     n_simulation = 100
     burnout = 5
 
@@ -39,7 +39,8 @@ def time_compare(channel, kernel, n_radius, max_m, restricted, conv_first):
         model(inputs)
         t1 = time.time()
         if sim >=0:
-            times.append((t1-t0)*1000)
+            times.append((t1-t0)*1000 / batch_size)
+
     with open(f"./log/times_{channel}_{kernel}_{n_radius}_{max_m}_{restricted}_{conv_first}.pkl", 'wb') as file:  
         pickle.dump(times, file) 
     

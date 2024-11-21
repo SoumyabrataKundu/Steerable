@@ -22,18 +22,18 @@ class Model(torch.nn.Module):
 device = 'cuda'
     
 def time_compare(channel, kernel, n_radius, max_m, restricted, conv_first):
-    times = []
     resolution = 28
-    batch_size = 3
+    batch_size = 10
     n_simulation = 100
     burnout = 5
-
+    
+    times = []
     restricted = bool(restricted)
     conv_first = bool(conv_first)
-
+    
     model = Model(channel, kernel, n_radius, max_m, restricted, conv_first).to(device)
-   
     inputs = torch.randn(batch_size, 1, *[resolution]*2, device=device)
+    
     for sim in range(-burnout, n_simulation):
         t0 = time.time()
         model(inputs)

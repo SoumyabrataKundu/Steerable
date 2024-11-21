@@ -56,12 +56,31 @@ def get_interpolation_matrix(kernel_size, n_radius, n_theta, k=1):
     I = torch.zeros(n_radius, n_theta, kernel_size[0], kernel_size[1])
     for r in range(n_radius):
         for theta in range(n_theta):
+            x1 = x1_values[r,theta]
+            x2 = x2_values[r,theta]
             for y1 in kernel1:
                 for y2 in kernel2:
-                    f = torch.zeros((len(kernel1), len(kernel2)))
-                    f[y1,y2] = 1
-                    spline = RectBivariateSpline(kernel1, kernel2, f, kx=k, ky=k)
-                    I[r,theta, y1, y2] = spline(x1_values[r,theta], x2_values[r,theta])[0, 0]
+                    if k == 0 or k == 1:
+                        integer_x1, fraction_x1 = floor(x1), x1 - floor(x1)
+                        integer_x2, fraction_x2 = floor(x2), x2 - floor(x2)
+                        
+                        def w(x,y):
+                            return float(x>= 0.5) * float(y>=0.5) if k==0 else x*y
+                        
+                        if (y1,y2) == (integer_x1, integer_x2):
+                            I[r,theta, y1, y2] = w(1-fraction_x1, 1-fraction_x2)
+                        if (y1,y2) == (integer_x1+1, integer_x2):
+                            I[r,theta, y1, y2] = w(fraction_x1, 1-fraction_x2)
+                        if (y1,y2) == (integer_x1, integer_x2+1):
+                            I[r,theta, y1, y2] = w(1 - fraction_x1, fraction_x2)
+                        if (y1,y2) == (integer_x1+1, integer_x2+1):
+                            I[r,theta, y1, y2] = w(fraction_x1, fraction_x2)
+                    
+                    elif k>1:
+                        f = torch.zeros((len(kernel1), len(kernel2)))
+                        f[y1,y2] = 1
+                        spline = RectBivariateSpline(kernel1, kernel2, f, kx=k, ky=k)
+                        I[r,theta, y1, y2] = spline(x1_values[r,theta], x2_values[r,theta])[0, 0]
     
     return I.type(torch.cfloat)
     
@@ -77,7 +96,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1)
     r2_values = (torch.arange(R2/(n_radius+1), R2, R2/(n_radius+1))[:n_radius]).type(torch.cfloat)
     
     # Interpolation
-    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(4, min(kernel_size)-1))
+    I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(interpolation_type, min(kernel_size)-1))
     
     # Fourier Transform Matrix
     FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))

@@ -1,13 +1,11 @@
 
-channels=(64) #(2 4 8 16 32 64)
+channels=(2 4 8 16 32 64)
 kernels=(2 3 4 5)
 n_radius=(2 4 6 8)
 max_m=(4 8 12 16)
 restricted=(0 1)
 conv_first=(0 1)
 
-batch_size=5
-n_simulations=10
 
 
 

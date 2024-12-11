@@ -114,8 +114,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
         I = get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi, interpolation_type) # Interpolation Matrix
         SHT = get_sh_transform_matrix(n_theta, n_phi, maxl) # Spherical Harmonic Transform Matrix
-        Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', (r1_values*r2_values*r3_values)**(2/3),
-                             SHT[l], I) for l in range(maxl+1)] # Fint Matrix
+        Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', r1_values*r2_values, SHT[l], I) for l in range(maxl+1)] # Fint Matrix
     else:
         raise ValueError("'interpolation_type' integer takes values between -1 and 1.")
 

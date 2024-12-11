@@ -74,7 +74,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1)
         Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
         Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
         
-    elif 0<= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
+    elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
         # Interpolation
         I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(interpolation_type, min(kernel_size)-1))
         # Fourier Transform Matrix

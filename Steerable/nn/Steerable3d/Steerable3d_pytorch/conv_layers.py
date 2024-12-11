@@ -15,7 +15,7 @@ from Steerable.nn.Steerable3d.utils import get_CFint_matrix, merge_channel_dim, 
 ##################################################################################################################################
 
 class SE3Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta,
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, interpolation_type=1,
                  dilation=1, padding=0, stride=1, restricted=False, conv_first=False):
         super(SE3Conv, self).__init__()
         
@@ -32,7 +32,9 @@ class SE3Conv(nn.Module):
         self.conv_first = conv_first
         
         # Fint Matrix
-        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_theta, n_theta, len(self.out_channels)-1, len(self.in_channels)-1, len(self.in_channels)-1)
+        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_theta, n_theta, 
+                                     len(self.out_channels)-1, len(self.in_channels)-1, len(self.in_channels)-1,
+                                     interpolation_type)
 
         if conv_first:
             if restricted:

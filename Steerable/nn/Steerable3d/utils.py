@@ -9,20 +9,26 @@ from scipy.special import sph_harm
 ############################################ Interpolation Matrix #####################################################
 #######################################################################################################################
 
-def get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi):
-    R = (kernel_size[0] - 1) / 2
-    r_values = torch.arange(R / (n_radius+1), R, R / (n_radius+1))
+def get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi, interpolation_type=1):
+    R1, R2, R3 = (kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2, (kernel_size[2] - 1) / 2
+    r1_values = torch.arange(R1 / (n_radius+1), R1, R1 / (n_radius+1))[:n_radius]
+    r2_values = torch.arange(R2 / (n_radius+1), R2, R2 / (n_radius+1))[:n_radius]
+    r3_values = torch.arange(R3 / (n_radius+1), R3, R3 / (n_radius+1))[:n_radius]
+    
     theta_values = torch.arange(0, pi, pi / n_theta)
     phi_values = torch.arange(0, 2 * pi, 2 * pi / n_phi)
 
     def w(x,y,z):
-        # return x*y*z
-        return x**2*y**2*z**2*(9 - 6*x - 6*y - 6*z + 4*x*y*z)
+        if interpolation_type == 0:
+            return float(x>=0.5)*float(y>=0.5)*float(z>=0.5)
+        elif interpolation_type == 1:
+            return x*y*z
+        # return x**2*y**2*z**2*(9 - 6*x - 6*y - 6*z + 4*x*y*z)
 
     I = torch.zeros(n_radius, n_theta, n_phi, kernel_size[0], kernel_size[1], kernel_size[2], dtype=torch.cfloat)
-    x_new = torch.tensordot(torch.tensordot(r_values, torch.sin(theta_values), dims=0), torch.cos(phi_values), dims = 0) + R
-    y_new = torch.tensordot(torch.tensordot(r_values, torch.sin(theta_values), dims=0), torch.sin(phi_values), dims = 0) + R
-    z_new = torch.tensordot(r_values, torch.cos(theta_values), dims=0).unsqueeze(2).repeat(1, 1, n_phi) + R
+    x_new = torch.tensordot(torch.tensordot(r1_values, torch.sin(theta_values), dims=0), torch.cos(phi_values), dims = 0) + R1
+    y_new = torch.tensordot(torch.tensordot(r2_values, torch.sin(theta_values), dims=0), torch.sin(phi_values), dims = 0) + R2
+    z_new = torch.tensordot(r3_values, torch.cos(theta_values), dims=0).unsqueeze(2).repeat(1, 1, n_phi) + R3
 
     for r in range(n_radius):
         for theta in range(n_theta):
@@ -87,20 +93,36 @@ def get_CGtensor(l,l1,l2):
 ################################################### Fint Matrix ###########################################################
 ###########################################################################################################################
 
-def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl):
-    # Interpolation Matrix
-    I = get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi)
+def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_type=1):
+    R1, R2, R3 = (kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2, (kernel_size[2] - 1) / 2
+    r1_values = torch.arange(R1 / (n_radius+1), R1, R1 / (n_radius+1))[:n_radius]
+    r2_values = torch.arange(R2 / (n_radius+1), R2, R2 / (n_radius+1))[:n_radius]
+    r3_values = torch.arange(R3 / (n_radius+1), R3, R3 / (n_radius+1))[:n_radius]
+    
+    if interpolation_type == -1:
+        x_range = torch.arange(-kernel_size[0]/2, kernel_size[0]/2, 1) + 0.5  # Example range for x-coordinate
+        y_range = torch.arange(-kernel_size[1]/2, kernel_size[1]/2, 1) + 0.5  # Example range for y-coordinate
+        z_range = torch.arange(-kernel_size[2]/2, kernel_size[2]/2, 1) + 0.5  # Example range for y-coordinate
+        
+        X, Y, Z = torch.meshgrid(x_range, y_range, z_range, indexing='xy')
+        
+        norm = torch.sqrt(X**2 + Y**2 + Z**2).reshape(kernel_size[0], kernel_size[1], kernel_size[2])
+        theta = torch.arctan2(Y, X)
+        tau_r = torch.exp(-(r1_values.reshape(-1,1,1) - norm)*(r2_values.reshape(-1,1,1) - norm)/2).type(torch.cfloat)
 
-    # Spherical Harmonic Transform Matrix
-    SHT = get_sh_transform_matrix(n_theta, n_phi, maxl)
-
-    # Fint Matrix
-    Fint = [torch.einsum('lt, rtxyz -> lrxyz', SHT[l], I) for l in range(maxl+1)]
+        
+    elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
+        I = get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi, interpolation_type) # Interpolation Matrix
+        SHT = get_sh_transform_matrix(n_theta, n_phi, maxl) # Spherical Harmonic Transform Matrix
+        Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', (r1_values*r2_values*r3_values)**(2/3),
+                             SHT[l], I) for l in range(maxl+1)] # Fint Matrix
+    else:
+        raise ValueError("'interpolation_type' integer takes values between -1 and 1.")
 
     return Fint
 
-def get_CFint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, maxl1, maxl2):
-    Fint = get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl2)
+def get_CFint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, maxl1, maxl2, interpolation_type=1):
+    Fint = get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl2, interpolation_type)
 
     # CG Tensor
     C =[[[(2*l1+1) * (2*l2+1) * get_CGtensor(l, l1, l2)/(2*l+1)

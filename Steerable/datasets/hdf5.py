@@ -33,12 +33,13 @@ class HDF5Dataset:
     def create_hdf5_dataset(self, name, dataset):
         self.file = h5py.File(self.filename, 'a')
         input, target = dataset[0]
+        target = torch.tensor(target)
         self._initialize_hdf5_dataset(name, input.shape, target.shape)
         
         for index in range(len(dataset)):
             try:
                 input, target = dataset[index]
-                self._write_into_hdf5_file(name, input, target)
+                self._write_into_hdf5_file(name, input, torch.tensor(target))
             except Exception as e:
                 print(f'Excpetion at {index + 1} : {e}')
                 

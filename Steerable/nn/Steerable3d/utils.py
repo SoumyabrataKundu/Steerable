@@ -102,14 +102,22 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
     if interpolation_type == -1:
         x_range = torch.arange(-kernel_size[0]/2, kernel_size[0]/2, 1) + 0.5  # Example range for x-coordinate
         y_range = torch.arange(-kernel_size[1]/2, kernel_size[1]/2, 1) + 0.5  # Example range for y-coordinate
-        z_range = torch.arange(-kernel_size[2]/2, kernel_size[2]/2, 1) + 0.5  # Example range for y-coordinate
-        
+        z_range = torch.arange(-kernel_size[2]/2, kernel_size[2]/2, 1) + 0.5  # Example range for z-coordinate
         X, Y, Z = torch.meshgrid(x_range, y_range, z_range, indexing='xy')
         
-        norm = torch.sqrt(X**2 + Y**2 + Z**2).reshape(kernel_size[0], kernel_size[1], kernel_size[2])
+        norm = torch.sqrt(X**2 + Y**2 + Z**2)
         theta = torch.arctan2(Y, X)
-        tau_r = torch.exp(-(r1_values.reshape(-1,1,1) - norm)*(r2_values.reshape(-1,1,1) - norm)/2).type(torch.cfloat)
-
+        phi = torch.acos(torch.clamp(Z / norm, -1.0, 1.0))
+        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1,1) - norm)**2)/2).type(torch.cfloat)
+        
+        Fint = []
+        for l in range(maxl+1):
+            Y_lm_stack = []
+            for m in range(-l, l + 1):
+                # Compute spherical harmonics using scipy
+                Y_lm_stack.append(torch.nan_to_num(torch.from_numpy(sph_harm(m, l, theta.numpy(), phi.numpy())).type(torch.cfloat), nan=0.0))
+            Fint.append(torch.stack(Y_lm_stack, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
+        
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
         I = get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi, interpolation_type) # Interpolation Matrix

@@ -115,7 +115,9 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
             Y_lm_stack = []
             for m in range(-l, l + 1):
                 # Compute spherical harmonics using scipy
-                Y_lm_stack.append(torch.nan_to_num(torch.from_numpy(sph_harm(m, l, theta.numpy(), phi.numpy())).type(torch.cfloat), nan=0.0))
+                Y_lm = torch.from_numpy(sph_harm(m, l, theta.numpy(), phi.numpy())).type(torch.cfloat)
+                Y_lm_stack.append(torch.complex(torch.nan_to_num(Y_lm.real, nan=0.0),
+                                                torch.nan_to_num(Y_lm.real, nan=0.0)))
             Fint.append(torch.stack(Y_lm_stack, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
         
         

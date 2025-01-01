@@ -69,7 +69,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1)
         
         norm = torch.sqrt(X**2 + Y**2).reshape(kernel_size[0], kernel_size[1])
         theta = torch.arctan2(Y, X)
-        tau_r = torch.exp(-(r1_values.reshape(-1,1,1) - norm)*(r2_values.reshape(-1,1,1) - norm)/2).type(torch.cfloat)
+        tau_r = torch.exp(-(r1_values.reshape(-1,1,1) - norm)*(r2_values.reshape(-1,1,1) - norm)/4).type(torch.cfloat)
 
         Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
         Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)

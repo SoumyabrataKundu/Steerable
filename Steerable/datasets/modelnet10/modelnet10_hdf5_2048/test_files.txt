@@ -1,0 +1,1 @@
+data/modelnet10_hdf5_2048/test0.h5

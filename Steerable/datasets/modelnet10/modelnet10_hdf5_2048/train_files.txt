@@ -1,0 +1,2 @@
+data/modelnet10_hdf5_2048/train0.h5
+data/modelnet10_hdf5_2048/train1.h5

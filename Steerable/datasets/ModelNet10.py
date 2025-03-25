@@ -7,6 +7,7 @@ import sys
 
 sys.path.append('../../Steerable/')
 from Steerable.datasets.hdf5 import HDF5Dataset
+from Steerable.datasets.download import download_and_unzip
 
 # Dataset Generation
 class ModelNet10(torch.utils.data.Dataset):
@@ -93,8 +94,11 @@ class ModelNet10(torch.utils.data.Dataset):
         jittered_data = np.clip(jittered_data + indices, -1+0.005, 1-0.005)
         return jittered_data
 
-
+URL = 'https://cloud.tsinghua.edu.cn/f/5414376f6afd41ce9b6d/?dl=1'
 def main(data_path, size, rotate, rotate_z, jitter):
+    if data_path is None:
+        download_and_unzip(URL, 'modelnet10')
+        data_path = 'modelnet10/modelnet10_hdf5_2048/'
     filename = 'ModelNet10' + ('_rotate' if rotate else ('_rotate_z' if rotate_z else '')) + ('_jitter' if jitter else '') + str(size) + '.hdf5'
     hdf5file = HDF5Dataset(filename)
 
@@ -108,7 +112,7 @@ if __name__== '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--size", type=int, required=True)
     parser.add_argument("--rotate", type=bool, default=False)
     parser.add_argument("--rotate_z", type=bool, default=False)

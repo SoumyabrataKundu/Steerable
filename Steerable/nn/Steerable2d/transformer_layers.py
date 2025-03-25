@@ -101,12 +101,12 @@ class PositionwiseFeedforward(nn.Module):
 ####################################################################################################################### 
 
 class SE2Transformer(nn.Module):
-    def __init__(self, transformer_dim, n_head, hidden_dim, max_m, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, hidden_dim, max_m, dropout = 0.1, add_pos_enc = True):
         super(SE2Transformer, self).__init__()
 
         # Layer Design
-        self.multihead_attention = SE2MultiSelfAttention(transformer_dim, n_head, max_m, add_pos_enc)
-        self.positionwise_feedforward = PositionwiseFeedforward(transformer_dim, hidden_dim, max_m)
+        self.multihead_attention = SE2MultiSelfAttention(transformer_dim, n_head, max_m, dropout, add_pos_enc)
+        self.positionwise_feedforward = PositionwiseFeedforward(transformer_dim, hidden_dim, max_m, dropout)
 
         self.layer_norm1 = SE2BatchNorm()
         self.layer_norm2 = SE2BatchNorm()

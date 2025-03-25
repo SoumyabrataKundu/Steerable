@@ -19,7 +19,6 @@ class SE2MultiSelfAttention(nn.Module):
         self.n_head = n_head
         self.max_m = max_m
         self.add_pos_enc = add_pos_enc
-        print(dropout)
         self.dropout = ComplexDropout(p = dropout)
 
         # Layer Parameters
@@ -123,12 +122,12 @@ class SE2Transformer(nn.Module):
 ####################################################################################################################### 
 
 class SE2TransformerEncoder(nn.Module):
-    def __init__(self, transformer_dim, n_head, max_m, n_layers = 1, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, max_m, n_layers = 1, dropout = 0.1, add_pos_enc = True):
         super(SE2TransformerEncoder, self).__init__()
 
         # Layer Design
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, add_pos_enc) for _ in range(n_layers)]
+            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, dropout, add_pos_enc) for _ in range(n_layers)]
         )
 
     def forward(self, x):
@@ -140,7 +139,7 @@ class SE2TransformerEncoder(nn.Module):
 ####################################################################################################################### 
 
 class SE2TransformerDecoder(nn.Module):
-    def __init__(self, transformer_dim, n_head, max_m, n_classes, n_layers, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, max_m, n_classes, n_layers, dropout = 0.1, add_pos_enc = True):
         super(SE2TransformerDecoder, self).__init__()
 
         self.transformer_dim = transformer_dim
@@ -149,7 +148,7 @@ class SE2TransformerDecoder(nn.Module):
         self.max_m = max_m
         
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, add_pos_enc) for _ in range(n_layers)]
+            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, dropout, add_pos_enc) for _ in range(n_layers)]
         )
 
         self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.float))

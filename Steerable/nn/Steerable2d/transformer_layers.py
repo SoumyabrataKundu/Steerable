@@ -49,8 +49,8 @@ class SE2MultiSelfAttention(nn.Module):
         
         # Attention Weights
         A = torch.sum(A, dim=1, keepdim=True)
-        A = nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1)
-        A = self.dropout(A).type(torch.cfloat)
+        A = nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1).type(torch.cfloat)
+        A = self.dropout(A)
  
         # Output
         result = V @ A.transpose(-2,-1)

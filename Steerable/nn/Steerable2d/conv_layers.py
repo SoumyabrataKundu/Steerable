@@ -317,7 +317,6 @@ class SE2Pooling(nn.Module):
 class ComplexDropout(nn.Module):
     def __init__(self, p: float = 0.1, inplace: bool = False):
         super().__init__()
-        print(p)
         if not 0 <= p < 1:
             raise ValueError(f"dropout probability has to be in [0,1), got {p}")
         self.p = p

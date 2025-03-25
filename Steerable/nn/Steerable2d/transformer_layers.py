@@ -19,6 +19,7 @@ class SE2MultiSelfAttention(nn.Module):
         self.n_head = n_head
         self.max_m = max_m
         self.add_pos_enc = add_pos_enc
+        print(dropout)
         self.dropout = ComplexDropout(p = dropout)
 
         # Layer Parameters

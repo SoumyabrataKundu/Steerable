@@ -2,14 +2,14 @@ import torch
 import torch.nn as nn
 from math import sqrt
 from Steerable.nn.Steerable2d.utils import get_pos_encod
-from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNorm
+from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNorm, ComplexDropout
         
 #######################################################################################################################
 ############################################## Multihead Self Attention ###############################################
 #######################################################################################################################
 
 class SE2MultiSelfAttention(nn.Module):
-    def __init__(self, transformer_dim, n_head, max_m, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, max_m, dropout = 0.1, add_pos_enc = True):
         super(SE2MultiSelfAttention, self).__init__()
 
         # Layer Design
@@ -19,6 +19,7 @@ class SE2MultiSelfAttention(nn.Module):
         self.n_head = n_head
         self.max_m = max_m
         self.add_pos_enc = add_pos_enc
+        self.dropout = ComplexDropout(dropout)
 
         # Layer Parameters
         self.embeddings = nn.Parameter(torch.randn(3, 1, max_m, n_head, self.query_dim, transformer_dim, dtype = torch.float))
@@ -48,7 +49,8 @@ class SE2MultiSelfAttention(nn.Module):
         
         # Attention Weights
         A = torch.sum(A, dim=1, keepdim=True)
-        A = nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1).type(torch.cfloat)
+        A = nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1)
+        A = self.dropout(A).type(torch.cfloat)
  
         # Output
         result = V @ A.transpose(-2,-1)
@@ -68,16 +70,18 @@ class SE2MultiSelfAttention(nn.Module):
 #######################################################################################################################    
 
 class PositionwiseFeedforward(nn.Module):
-    def __init__(self, input_dim, hidden_dim, max_m):
+    def __init__(self, input_dim, hidden_dim, max_m, dropout = 0.1):
         super(PositionwiseFeedforward, self).__init__()
 
         self.max_m = max_m
 
         self.weights1 = nn.Parameter(torch.randn(max_m, hidden_dim, input_dim, dtype = torch.float))
         self.weights2 = nn.Parameter(torch.randn(max_m, input_dim, hidden_dim, dtype = torch.float))
-
+        self.dropout1 = ComplexDropout(dropout)
+        self.dropout2 = ComplexDropout(dropout)
+        
         self.eps = 1e-5
-        self.nonlinearity = SE2NormNonLinearity(hidden_dim, max_m)
+        self.nonlinearity = SE2NormNonLinearity(hidden_dim, max_m, nonlinearity=nn.GELU())
 
     def forward(self, x):
         x_shape = x.shape
@@ -85,7 +89,9 @@ class PositionwiseFeedforward(nn.Module):
 
         x = self.weights1.type(torch.cfloat) @ x
         x = self.nonlinearity(x)
+        x = self.dropout1(x)
         x = self.weights2.type(torch.cfloat) @ x
+        x = self.dropout2(x)
         
         x = x.reshape(*x_shape)
         return x   

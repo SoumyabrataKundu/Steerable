@@ -19,7 +19,7 @@ class SE2MultiSelfAttention(nn.Module):
         self.n_head = n_head
         self.max_m = max_m
         self.add_pos_enc = add_pos_enc
-        self.dropout = ComplexDropout(dropout)
+        self.dropout = ComplexDropout(p = dropout)
 
         # Layer Parameters
         self.embeddings = nn.Parameter(torch.randn(3, 1, max_m, n_head, self.query_dim, transformer_dim, dtype = torch.float))
@@ -77,8 +77,8 @@ class PositionwiseFeedforward(nn.Module):
 
         self.weights1 = nn.Parameter(torch.randn(max_m, hidden_dim, input_dim, dtype = torch.float))
         self.weights2 = nn.Parameter(torch.randn(max_m, input_dim, hidden_dim, dtype = torch.float))
-        self.dropout1 = ComplexDropout(dropout)
-        self.dropout2 = ComplexDropout(dropout)
+        self.dropout1 = ComplexDropout(p = dropout)
+        self.dropout2 = ComplexDropout(p = dropout)
         
         self.eps = 1e-5
         self.nonlinearity = SE2NormNonLinearity(hidden_dim, max_m, nonlinearity=nn.GELU())

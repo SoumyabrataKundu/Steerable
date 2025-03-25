@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from Steerable.datasets.hdf5 import HDF5Dataset
+from Steerable.datasets.download import download_and_unzip
 
 
 #####################################################################################################
@@ -97,15 +98,25 @@ def get_datasets(data_path) -> dict:
 ######################################## Main Function ##############################################
 ##################################################################################################### 
 
-
-def main():
-    datasets = get_datasets('../data/MoNuSeg', rotate=True)
+URL = None
+def main(data_path):
+    if data_path is None:
+            download_and_unzip(URL, 'MoNuSeg')
+            data_path = 'MoNuSeg/MoNuSeg/'
+    datasets = get_datasets(data_path, rotate=True)
     hdf5file = HDF5Dataset('MoNuSeg.hdf5')
     for mode in datasets:
         hdf5file.create_hdf5_dataset(mode, datasets[mode])
 
     return
     
-# if __name__ == "__main__":
-#     main()
+if __name__== '__main__':
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str, default=None)
+    args = parser.parse_args()
+
+    main(**args.__dict__)
 

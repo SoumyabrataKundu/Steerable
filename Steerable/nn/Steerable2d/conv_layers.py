@@ -275,10 +275,9 @@ class SE2BatchNorm(nn.Module):
         self.eps = 1e-5
 
     def forward(self, x):
-        mean = torch.mean(x, dim = (0,))
-        norm = torch.linalg.vector_norm(x, dim = (1,), keepdim=True)
-        std = torch.std(norm, dim = (0,)) + self.eps
-        x = (x-mean)/std
+        x = x - torch.mean(x, dim = (0,))
+        norm = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
+        x = x/norm
 
         return x
     

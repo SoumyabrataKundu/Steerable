@@ -268,22 +268,7 @@ class SE2BatchNorm(nn.Module):
         x = (x.real/factor) + 1j*(x.imag/factor)
 
         return x
-    
-class SE2BatchNorm(nn.Module):
-    def __init__(self):
-        super(SE2BatchNorm, self).__init__()
-        self.eps = 1e-5
 
-    def forward(self, x):
-        factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
-        x = (x.real/factor) + 1j*(x.imag/factor)
-        
-        x = x - torch.mean(x, dim = (0,), keepdim=True)
-        std = torch.std(x, dim = (0,), keepdim=True) + self.eps
-        x = (x.real/std) + 1j*(x.imag/std)
-
-        return x
-    
 #######################################################################################################################
 ################################################## Average Pooling Layer ##############################################
 #######################################################################################################################  

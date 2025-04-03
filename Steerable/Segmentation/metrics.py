@@ -4,19 +4,19 @@ import torch
 class Metrics:
     def __init__(self, num_classes):
         self.num_classes = num_classes
-        self.confusion = torch.zeros(self.num_classes, self.num_classes)
     
     #####################################################################################################
     ####################################### Confusion Matrix ############################################
     #####################################################################################################
 
-    def add_to_confusion_matrix(self, preds, targets):
+    def confusion_matrix(self, preds, targets):
+        self.confusion = torch.zeros(self.num_classes, self.num_classes)
         if not len(preds.shape) == len(targets.shape):
             raise ValueError(f"Size of prediction {list(preds.shape)} must match size of targets {list(targets.shape)}")
         
         for i in range(self.num_classes):
             for j in range(self.num_classes):
-                self.confusion[i,j] += torch.sum(torch.logical_and(targets==i, preds==j)).item()
+                self.confusion[i,j] = torch.sum(torch.logical_and(targets==i, preds==j)).item()
         
         
     #####################################################################################################

@@ -305,7 +305,7 @@ class SE2Pooling(nn.Module):
 
     def forward(self, x):
         x = torch.mean(x.flatten(3), dim = (3,))
-        x = torch.sum(x.abs(), dim = 1)
+        x = torch.max(x.abs(), dim = 1)[0]
         return x
 
 #######################################################################################################################

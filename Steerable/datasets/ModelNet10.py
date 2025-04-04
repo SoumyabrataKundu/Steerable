@@ -4,6 +4,8 @@ import h5py
 import os
 import fnmatch
 import sys
+import requests
+import zipfile
 
 sys.path.append('../../Steerable/')
 from Steerable.datasets.hdf5 import HDF5Dataset
@@ -11,17 +13,42 @@ from Steerable.datasets.download import download_and_unzip
 
 # Dataset Generation
 class ModelNet10(torch.utils.data.Dataset):
-    def __init__(self, data_path, size, mode='train', rotate=False, rotate_z=False, jitter=False) -> None:
+    def __init__(self, data_path, size, mode='train', rotate=False, rotate_z=False, jitter=False, download=False) -> None:
+        if not os.path.isdir(os.path.join(data_path, 'modelnet10_hdf5_2048')):
+            if download:
+                URL = 'https://cloud.tsinghua.edu.cn/f/5414376f6afd41ce9b6d/?dl=1'
+                # Create Directories
+                os.makedirs(data_path, exist_ok=True)
+
+                # Download ZIP (streamed)
+                response = requests.get(URL, stream=True)
+                response.raise_for_status()
+
+                with open(data_path+'modelnet10.zip', "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                # Extract
+                with zipfile.ZipFile(data_path+'modelnet10.zip', "r") as z:
+                    z.extractall(data_path)
+                
+                # Delete zipped file
+                os.remove(data_path+'modelnet10.zip')
+            else:
+                raise(FileNotFoundError('Dataset not found. You can use download=True to download it.'))
+            
+        
+        data_path = os.path.join(data_path, 'modelnet10_hdf5_2048')
         if mode not in ['train', 'test']:
             raise ValueError(f'Invalid mode {mode}. Should be one of train or test.')
+        self.files = [os.path.join(data_path, f) for f in os.listdir(data_path) if fnmatch.fnmatch(f, mode+'*.h5')]
         
         self.size = size
         self.rotate = rotate
         self.rotate_z = rotate_z
         self.jitter = jitter
-        self.files = [os.path.join(data_path, f) for f in os.listdir(data_path) if fnmatch.fnmatch(f, mode+'*.h5')]
         self.length = []
-
         for file in self.files:
             with h5py.File(file, 'r') as f:
                 self.length.append(len(f['label']))

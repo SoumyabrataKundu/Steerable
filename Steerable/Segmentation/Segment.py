@@ -1,6 +1,4 @@
 import torch
-from typing import List, Tuple
-
 
 #####################################################################################################
 ################################### Create Segmentaion Dataset ######################################
@@ -9,16 +7,21 @@ from typing import List, Tuple
 class SegmentationDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, image_shape,
                  min_num_per_image = 1, max_num_per_image = 1, 
-                 max_iou = 0.2, n_samples = None) -> None:
+                 max_iou = 0.05, n_samples = None, transforms=None, rotate=False) -> None:
 
         
-        
+        self.dim = len(image_shape)-1
         self.dataset = dataset
-        self.image_shape = tuple(dataset[0][0].shape) if image_shape is None else image_shape
+        self.image_shape = image_shape
         self.min_num_per_image = min_num_per_image
         self.max_num_per_image = max_num_per_image
         self.max_iou = max_iou
+        self.transforms = transforms
+        self.rotate = rotate
         self.n_samples = len(self.dataset) if n_samples is None else n_samples
+        
+        if len(self.image_shape) != len(dataset[0][0].shape):
+            raise ValueError("`image_shape` and images in the dataset should have same number of dimensions.")
 
     def __getitem__(self, index):
         if 0 <= index < self.n_samples:
@@ -26,18 +29,23 @@ class SegmentationDataset(torch.utils.data.Dataset):
         else:
             raise ValueError("Index Out of Bounds.")
 
-        return image, target[0]
+        if self.transforms is not None:
+            image, target = self.transforms(image, target)
+   
+        return image, target
 
     def __len__(self):
         return self.n_samples
 
     
-    def create_semantic_segmentation_data(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def create_semantic_segmentation_data(self):
 
         num_digits = torch.randint(self.min_num_per_image, self.max_num_per_image + 1, (1,)).item()
 
         input_array, arrays_overlaid, labels_overlaid, bounding_boxes_overlaid = self.overlay_arrays(
             num_input_arrays_to_overlay=num_digits)
+
+
 
         target_array = self.create_segmentation_target(images=arrays_overlaid,
                                                     labels=labels_overlaid,
@@ -47,12 +55,7 @@ class SegmentationDataset(torch.utils.data.Dataset):
         return input_array, target_array
 
 
-    def create_segmentation_target(self,
-                                images: torch.Tensor,
-                                labels: torch.Tensor,
-                                bounding_boxes: torch.Tensor,
-                                ) -> torch.Tensor:
-
+    def create_segmentation_target(self, images, labels, bounding_boxes):
         if len(bounding_boxes) != len(labels) != len(images):
             raise ValueError(
                 f'The length of bounding_boxes must be the same as the length of labels. Received shapes: {bounding_boxes.shape}!={labels.shape}')
@@ -62,8 +65,8 @@ class SegmentationDataset(torch.utils.data.Dataset):
         labels.insert(0,-1)
         labels = torch.tensor(labels, dtype=torch.int32) + 1
         for i in range(len(bounding_boxes)):
-            xmin, ymin, xmax, ymax = bounding_boxes[i]
-            individual_targets[i+1][..., ymin:ymax, xmin:xmax] += images[i]
+            slices = tuple(slice(dmin, dmax) for dmin, dmax in zip(bounding_boxes[i][0].tolist(), bounding_boxes[i][1].tolist()))
+            individual_targets[i+1][(Ellipsis,) + slices] += images[i]
 
         targets = torch.stack(individual_targets, dim=0)
         target = labels[torch.argmax(targets, dim=0)]
@@ -84,15 +87,17 @@ class SegmentationDataset(torch.utils.data.Dataset):
             images, labels = self.dataset[i]
             bounding_box = self.overlay_at_random(array1=output_array, array2=images, bounding_boxes=bounding_boxes)
             
-            arrays_overlaid.append(images)
-            labels_overlaid.append(labels.item())
-            
             if bounding_box is None:
                 break
-
-
+            
+            arrays_overlaid.append(images)
             bounding_boxes_as_tuple.append(list(bounding_box.values()))
             bounding_boxes.append(bounding_box)
+            try:
+                labels_overlaid.append(labels.item())
+            except AttributeError:
+                labels_overlaid.append(labels)
+            
             
         arrays_overlaid = arrays_overlaid
         labels_overlaid = labels_overlaid
@@ -100,16 +105,12 @@ class SegmentationDataset(torch.utils.data.Dataset):
 
         return output_array, arrays_overlaid, labels_overlaid, bounding_boxes_overlaid
 
-    def overlay_at_random(self, array1: torch.Tensor, array2: torch.Tensor,
-                      bounding_boxes: List[dict] = None) -> torch.Tensor:
+    def overlay_at_random(self, array1, array2, bounding_boxes = None):
         if not bounding_boxes:
             bounding_boxes = []
 
-        *_ , height1, width1 = array1.shape
-        *_ , height2, width2 = array2.shape
-
-        max_x = width1 - width2
-        max_y = height1 - height2
+        dimension1 = torch.tensor(array1.shape[-self.dim:])
+        dimension2 = torch.tensor(array2.shape[-self.dim:])
         
         is_valid = False
         # This number is arbitrary. There are better ways of doing this but this is fast enough.
@@ -120,14 +121,12 @@ class SegmentationDataset(torch.utils.data.Dataset):
                 return
             else:
                 attempt += 1
-            x = torch.randint(0, max_x + 1, (1,)).item()
-            y = torch.randint(0, max_y + 1, (1,)).item()
+            candidate = torch.tensor([torch.randint(0, max_dim.item()+1, (1,)).item() 
+                                      for max_dim in dimension1-dimension2])
             
             candidate_bounding_box = {
-                'xmin': x,
-                'ymin': y,
-                'xmax': x + width2,
-                'ymax': y + height2,
+                'min' : candidate,
+                'max' : candidate + dimension2
             }
     
             is_valid = True
@@ -137,42 +136,38 @@ class SegmentationDataset(torch.utils.data.Dataset):
                     is_valid = False
                     break
 
-        self.overlay_array(array1=array1, array2=array2, x=x, y=y)
+        self.overlay_array(array1=array1, array2=array2, candidate=candidate)
 
         return candidate_bounding_box
-    def overlay_array(self, array1: torch.Tensor, array2:torch.Tensor, x: int, y: int) -> torch.Tensor:
+    
+    def overlay_array(self, array1, array2, candidate) -> torch.Tensor:
 
-        *other1, height1, width1,  = array1.shape
-        *other2, height2, width2 = array2.shape
+        other1, dimension1 = torch.tensor(array1.shape[:-self.dim]), torch.tensor(array1.shape[-self.dim:])
+        other2, dimension2 = torch.tensor(array2.shape[:-self.dim]), torch.tensor(array2.shape[-self.dim:])
 
-        if height2 > height1 or width2 > width1:
+        if torch.any(dimension1<dimension2):
             raise ValueError('array2 must have a smaller shape than array1')
 
-        if other1 != other2:
+        if torch.any(other1 != other2):
             raise ValueError('array1 and array2 must have same non-singleton dimension.')
 
         max_array_value = max([torch.max(array1), torch.max(array2)])
         min_array_value = min([torch.min(array1), torch.min(array2)])
-        array1[..., y:y+height2, x:x+width2] += array2
-
+        
+        slices = tuple(slice(dmin, dmax) for dmin, dmax in zip(candidate.tolist(), (candidate+dimension2).tolist()))
+        array1[(Ellipsis,) + slices] += array2
         array1 = torch.clamp_(array1, min_array_value, max_array_value)
 
-        return array1
+        return
     
     
     def calculate_iou(self, bounding_box1: dict, bounding_box2: dict) -> float:
-        A1 = ((bounding_box1['xmax'] - bounding_box1['xmin'])
-            * (bounding_box1['ymax'] - bounding_box1['ymin']))
-        A2 = ((bounding_box2['xmax'] - bounding_box2['xmin'])
-            * (bounding_box2['ymax'] - bounding_box2['ymin']))
-
-        xmin = max(bounding_box1['xmin'], bounding_box2['xmin'])
-        ymin = max(bounding_box1['ymin'], bounding_box2['ymin'])
-        xmax = min(bounding_box1['xmax'], bounding_box2['xmax'])
-        ymax = min(bounding_box1['ymax'], bounding_box2['ymax'])
-
-        if ymin >= ymax or xmin >= xmax:
-            return 0
-
-        return ((xmax-xmin) * (ymax - ymin)) / (A1 + A2)
+        A1 = torch.prod(bounding_box1['max'] - bounding_box1['min'])
+        A2 = torch.prod(bounding_box2['max'] - bounding_box2['min'])
+        
+        intersection_min = torch.max(torch.stack([bounding_box1['min'], bounding_box2['min']], dim=0), dim=0)[0]
+        intersection_max = torch.min(torch.stack([bounding_box1['max'], bounding_box2['max']], dim=0), dim=0)[0]
+        
+        iou = 0 if torch.any(intersection_max<intersection_min) else torch.prod(intersection_max-intersection_min) / (A1 + A2)
+        return iou
 

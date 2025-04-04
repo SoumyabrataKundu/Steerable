@@ -151,12 +151,12 @@ def get_CFint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, maxl1, maxl2, 
 #########################################################################################################################
 
 
-def rotate_3D_image(image, degree):
+def rotate_3D_image(image, degree, order=5):
     
     def rotate_slice_image(image_slice, degree):
-        image_slice = torch.from_numpy(rotate(image_slice, degree[0], (1,0), reshape=False, order = 5))
-        image_slice = torch.from_numpy(rotate(image_slice, degree[1], (0,2), reshape=False, order = 5))
-        image_slice = torch.from_numpy(rotate(image_slice, degree[2], (1,0), reshape=False, order = 5))
+        image_slice = torch.from_numpy(rotate(image_slice, degree[0], (1,0), reshape=False, order = order))
+        image_slice = torch.from_numpy(rotate(image_slice, degree[1], (0,2), reshape=False, order = order))
+        image_slice = torch.from_numpy(rotate(image_slice, degree[2], (1,0), reshape=False, order = order))
         
         return image_slice
     

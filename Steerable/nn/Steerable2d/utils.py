@@ -130,7 +130,9 @@ def get_pos_encod(kernel_size, max_m):
 ################################################### Rotate Image  #####################################################
 #######################################################################################################################
 
-def rotate_2D_image(image, degree):
+def rotate_2D_image(image, degree=None):
+    if degree is None:
+        degree = torch.randint(0, 360, (1,)).item()
     
     def rotate_slice_image(image_slice, degree):
         image_slice = torch.from_numpy(rotate(image_slice, degree, (1,0), reshape=False, order = 5))

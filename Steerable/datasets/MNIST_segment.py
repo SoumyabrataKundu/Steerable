@@ -21,7 +21,7 @@ def get_datasets(data_path, rotate=False) -> dict:
     
         
     kwargs = {
-        'image_shape' : (1,60,60),
+        'image_shape' : (1,56,56),
         'min_num_per_image' : 2,
         'max_num_per_image' : 4,
         'max_iou' : 0.2,

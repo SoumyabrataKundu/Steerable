@@ -69,7 +69,7 @@ class SegmentationDataset(torch.utils.data.Dataset):
             individual_targets[i+1][(Ellipsis,) + slices] += images[i]
 
         targets = torch.stack(individual_targets, dim=0)
-        target = labels[torch.argmax(targets, dim=0)]
+        target = labels[torch.argmax(torch.mean(targets, dim=1), dim=0)]
 
         return target
     

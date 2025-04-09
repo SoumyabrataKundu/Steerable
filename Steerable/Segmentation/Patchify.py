@@ -7,7 +7,7 @@ class PatchifyDataset(torch.utils.data.Dataset):
         self.kernel_size = kernel_size
         
         self.patchify = Patchify(kernel_size, stride)
-        self.patches_per_image = self.patchify.num_patches(dataset[0][0][1:])
+        self.patches_per_image = len(self.patchify(dataset[0][0]))
         
     def __getitem__(self, index):
         image, target = self.dataset[index // self.patches_per_image]

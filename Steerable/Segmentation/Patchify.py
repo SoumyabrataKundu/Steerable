@@ -49,7 +49,7 @@ class Reconstruct:
     def __init__(self, kernel_size, image_shape, stride=1, padding=0, sigma=1.0):
         self.kernel_size = kernel_size
         self.dimension = len(self.kernel_size)
-        self.image_shape = image_shape if type(image_shape) is tuple else tuple([image_shape]*self.dimension)
+        self.image_shape = image_shape
         self.sigma = sigma
         self.stride = stride if type(stride) is tuple else tuple([stride]*self.dimension)
         self.padding = padding if type(padding) is tuple else tuple([padding]*self.dimension)
@@ -85,6 +85,7 @@ class Reconstruct:
     
     def _embed_kernel_into_volume(self, fill_value = -float('inf'),):
         # number of placements vertically & horizontally
+        print(self.image_shape, self.padding, self.kernel.shape, self.stride)
         patches = torch.tensor([(self.image_shape[i] + 2*self.padding[i] - self.kernel.shape[i])//self.stride[i] + 1 for i in range(self.dimension)])
         N = torch.prod(patches).item()
 

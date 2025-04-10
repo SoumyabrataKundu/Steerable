@@ -32,7 +32,7 @@ class Metrics:
         return torch.nan_to_num(tp / (tp + fp + fn), 1).mean(dim=0)
 
     def mIOU(self):
-        return torch.mean(self.iou_per_class()).item()
+        return torch.mean(self.iou_per_class()[1:]).item()
 
 
     def fIOU(self):
@@ -69,7 +69,7 @@ class Metrics:
         return torch.mean((2*tp + smooth) / (2*tp + fp + fn + smooth), dim=0)
 
     def mDice(self):
-        return torch.mean(self.dice_per_class()).item()
+        return torch.mean(self.dice_per_class()[1:]).item()
 
     def fDice(self):
         pixel_frequency = torch.sum(self.confusion, dim=-1) / torch.sum(self.confusion.flatten(1), dim=-1, keepdim=True)

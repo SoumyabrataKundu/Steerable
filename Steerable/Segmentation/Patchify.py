@@ -41,6 +41,9 @@ class Patchify:
         
         return tensor
     
+    def num_patches(self, image_shape):
+        return torch.prod(torch.tensor([(image_shape[i] + 2*self.padding[i] - self.kernel_size[i])//self.stride[i] + 1 for i in range(self.dimension)])).item()
+    
     
 class Reconstruct:
     def __init__(self, kernel_size, image_shape, stride=1, padding=0, sigma=1.0):
@@ -80,8 +83,6 @@ class Reconstruct:
         
         return torch.sum((mesh-c)**2/(2*self.sigma**2), dim=-1)
     
- 
-    
     def _form_conv_transpose_input(self):
         # number of placements vertically & horizontally
         N = torch.prod(self.num_patches_per_dim).item()
@@ -115,9 +116,9 @@ class Reconstruct:
         op = [self.image_shape[i] - (self.num_patches_per_dim[i]-1)*self.stride[i] + 2*self.padding[i] - self.kernel.shape[i] for i in range(self.dimension)]
         
         if self.dimension == 2:
-            output = F.conv_transpose2d(self.inp, weights, stride=self.stride, padding=self.padding,output_padding=op,groups=N)
+            output = F.conv_transpose2d(self.inp.to(weights.device), weights, stride=self.stride, padding=self.padding,output_padding=op,groups=N)
         elif self.dimension==3:
-            output = F.conv_transpose3d(self.inp, weights, stride=self.stride, padding=self.padding,output_padding=op,groups=N)
+            output = F.conv_transpose3d(self.inp.to(weights.device), weights, stride=self.stride, padding=self.padding,output_padding=op,groups=N)
         else:
             raise ValueError(f'Only 2D and 3D kernel shape is supported.')
         return output

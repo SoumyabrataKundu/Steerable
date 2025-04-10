@@ -41,9 +41,6 @@ class Patchify:
         
         return tensor
     
-    def num_patches(self, image_shape):
-        return torch.prod(torch.tensor([(image_shape[i] + 2*self.padding[i] - self.kernel_size[i])//self.stride[i] + 1 for i in range(self.dimension)])).item()
-        
     
 class Reconstruct:
     def __init__(self, kernel_size, image_shape, stride=1, padding=0, sigma=1.0):
@@ -61,20 +58,20 @@ class Reconstruct:
             raise ValueError(f'kernel_size ({len(self.dimension)}) should have same number of dimension as padding ({len(self.padding)}).')
         
         if self.dimension != len(self.image_shape):
-            raise ValueError(f'shape of kernel ({self.kernel.shape}) and image shape ({self.image_shape}) should match.')
+            raise ValueError(f'shape of kernel ({self.dimension}) and image shape ({self.image_shape}) should match.')
         
         self.kernel = self._gaussian_kernel()
-        embedded_kernel = self._embed_kernel_into_volume()
-        unfolded_kernel = Patchify(kernel_size=self.kernel.shape, stride=self.stride, padding=self.padding)(embedded_kernel)
-        self.weights = torch.movedim(torch.diagonal(unfolded_kernel, dim1=0, dim2=1), -1,0).unsqueeze(1)
+        self.num_patches_per_dim = self.get_num_patches_per_dim()
+        self.weights = self._embed_kernel_into_volume()
+        
     
     def __call__(self, patches):
         if patches.shape[0] != self.weights.shape[0]:
-            raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but only {patches.shape[0]} were given.')
-        recon = (self.weights.to(patches.device)*patches).reshape(patches.shape[0], -1).transpose(0,1).unsqueeze(0)
-        output = F.fold(recon,output_size=self.image_shape,kernel_size=patches.shape[2:],padding=self.padding,stride=self.stride)
+            raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but {patches.shape[0]} were given.')
+        self.recon = self.weights.to(patches.device)*patches
+        output = self._unfold(self.recon).reshape(-1, patches.shape[1], *self.image_shape).sum(dim=0)
 
-        return output[0]
+        return output
 
     def _gaussian_kernel(self):
         coords = [torch.arange(0, k, 1) for k in self.kernel_size]
@@ -83,38 +80,47 @@ class Reconstruct:
         
         return torch.sum((mesh-c)**2/(2*self.sigma**2), dim=-1)
     
-    def _embed_kernel_into_volume(self, fill_value = -float('inf'),):
+ 
+    
+    def _form_conv_transpose_input(self):
         # number of placements vertically & horizontally
-        print(self.image_shape, self.padding, self.kernel.shape, self.stride)
-        patches = torch.tensor([(self.image_shape[i] + 2*self.padding[i] - self.kernel.shape[i])//self.stride[i] + 1 for i in range(self.dimension)])
-        N = torch.prod(patches).item()
+        N = torch.prod(self.num_patches_per_dim).item()
 
-        # 1) Build the one-hot “input” map of shape (1, N, n_y, n_x)
-        inp = torch.zeros(1, N, *patches, device=self.kernel.device, dtype=self.kernel.dtype)
-        coords  = [torch.arange(patch, device=self.kernel.device) for patch in patches]
+        # Build the one-hot “input” map of shape (1, N, n_y, n_x)
+        self.inp = torch.zeros(1, N, *self.num_patches_per_dim, device=self.kernel.device, dtype=self.kernel.dtype)
+        coords  = [torch.arange(patch, device=self.kernel.device) for patch in self.num_patches_per_dim]
         grid = [v.flatten() for v in torch.meshgrid(*coords, indexing='ij')]
         idx_flat = torch.zeros_like(grid[0])
-        for i in range(len(patches)):
-            idx_flat += grid[i] * torch.prod(patches[i+1:])
-        inp[tuple([0,idx_flat,*grid])] = 1
-
-        # 2) Prepare kernels
+        for i in range(self.dimension):
+            idx_flat += grid[i] * torch.prod(self.num_patches_per_dim[i+1:])
+        self.inp[tuple([0,idx_flat,*grid])] = 1
+    
+    def _embed_kernel_into_volume(self, fill_value = -float('inf')):
+        self._form_conv_transpose_input()
+        N = torch.prod(self.num_patches_per_dim).item()
+        
         weight_val  = self.kernel.reshape(1,1,*self.kernel.shape).repeat(N,1,*[1]*self.dimension)
         weight_mask = torch.ones_like(weight_val)
-
-        # 3) Compute needed output_padding to exactly hit (H,W)
-        op = [self.image_shape[i] - (patches[i]-1)*self.stride[i] + 2*self.padding[i] - self.kernel.shape[i] for i in range(self.dimension)]
-
-        # 4) Run grouped transposed conv for values & mask
+        out_val = self._unfold(weight_val).squeeze(0)
+        out_mask = self._unfold(weight_mask).squeeze(0)
+        
+        embedded_kernel = torch.softmax(torch.where(out_mask.bool(), out_val, fill_value), dim=0)
+        unfolded_kernel = Patchify(kernel_size=self.kernel.shape, stride=self.stride, padding=self.padding)(embedded_kernel)
+        
+        return torch.movedim(torch.diagonal(unfolded_kernel, dim1=0, dim2=1), -1,0).unsqueeze(1) 
+    
+    def _unfold(self, weights):
+        # Compute needed output_padding to exactly hit (H,W)
+        N = torch.prod(self.num_patches_per_dim).item()
+        op = [self.image_shape[i] - (self.num_patches_per_dim[i]-1)*self.stride[i] + 2*self.padding[i] - self.kernel.shape[i] for i in range(self.dimension)]
+        
         if self.dimension == 2:
-            out_val  = F.conv_transpose2d(inp, weight_val,stride=self.stride,padding=self.padding,output_padding=op,groups=N).squeeze(0)
-            out_mask = F.conv_transpose2d(inp, weight_mask,stride=self.stride,padding=self.padding,output_padding=op,groups=N).squeeze(0)
-        elif self.dimension == 3:
-            out_val  = F.conv_transpose3d(inp, weight_val,stride=self.stride,padding=self.padding,output_padding=op,groups=N).squeeze(0)
-            out_mask = F.conv_transpose3d(inp, weight_mask,stride=self.stride,padding=self.padding,output_padding=op,groups=N).squeeze(0)
+            output = F.conv_transpose2d(self.inp, weights, stride=self.stride, padding=self.padding,output_padding=op,groups=N)
+        elif self.dimension==3:
+            output = F.conv_transpose3d(self.inp, weights, stride=self.stride, padding=self.padding,output_padding=op,groups=N)
         else:
             raise ValueError(f'Only 2D and 3D kernel shape is supported.')
-        
-        # 5) Combine: where mask==1 keep val, else fill_value
-        bg = torch.tensor(fill_value, device=self.kernel.device, dtype=self.kernel.dtype)
-        return torch.softmax(torch.where(out_mask.bool(), out_val, bg), dim=0)
+        return output
+    
+    def get_num_patches_per_dim(self):
+        return torch.tensor([(self.image_shape[i] + 2*self.padding[i] - self.kernel.shape[i])//self.stride[i] + 1 for i in range(self.dimension)])

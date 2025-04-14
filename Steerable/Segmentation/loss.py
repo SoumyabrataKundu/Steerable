@@ -142,7 +142,7 @@ class BinaryCombinedLoss(nn.Module):
 ##################################################################################################### 
     
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2):
+    def __init__(self, alpha=0.75, gamma=2):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
@@ -150,7 +150,9 @@ class FocalLoss(nn.Module):
     def forward(self, preds, truth):
         ce_loss = torch.nn.functional.cross_entropy(preds, truth, reduction='none')
         pt = torch.exp(-ce_loss)
-        focal_loss = self.alpha * ((1 - pt) ** self.gamma) * ce_loss
+        bg = (truth==0).long()
+        alpha_t = self.alpha * (1-bg) + (1-self.alpha)*bg
+        focal_loss = alpha_t * ((1 - pt) ** self.gamma) * ce_loss
         return focal_loss.mean()
     
 class BinaryFocalLoss(nn.Module):

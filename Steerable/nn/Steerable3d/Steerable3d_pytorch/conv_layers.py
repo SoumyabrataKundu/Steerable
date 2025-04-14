@@ -3,10 +3,10 @@ import torch.nn as nn
 from numpy import prod
 
 gelib_installed = True
-try:
-    import gelib
-except:
-    gelib_installed = False
+#try:
+#    import gelib
+#except:
+#    gelib_installed = False
 
 from Steerable.nn.Steerable3d.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 

@@ -41,9 +41,12 @@ class Patchify:
             padding.append([ceil(p), floor(p)])
         return torch.tensor(padding)
     
-    def num_patches(self, image_shape):
+    def num_patches_per_dim(self, image_shape):
         padding = self.get_padding(image_shape)
         return tuple((image_shape[i] + torch.sum(padding[i]).item() - self.kernel_size[i])//self.stride[i] + 1 for i in range(self.dimension))
+    
+    def num_patches(self, image_shape):
+        return torch.prod(torch.tensor(self.num_patches_per_dim(image_shape)))
     
     
 class Reconstruct:

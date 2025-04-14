@@ -52,7 +52,7 @@ class PH2(torch.utils.data.Dataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return image, target[0]
+        return image, target[0].long()
 
     def __len__(self):
         return self.n_samples

@@ -6,18 +6,14 @@ class PatchifyDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, kernel_size, stride = 1):
         self.dataset = dataset
         self.kernel_size = kernel_size
-        
         self.patchify = Patchify(kernel_size, stride)
-        self.patches_per_image = len(self.patchify(dataset[0][0]))
-        
+               
     def __getitem__(self, index):
-        image, target = self.dataset[index // self.patches_per_image]
-        extracted_patches = self.patchify(image)[index % self.patches_per_image]
-        extracted_targets = self.patchify(target.unsqueeze(0))[index % self.patches_per_image,0]
-        return extracted_patches, extracted_targets
+        image, target = self.dataset[index]
+        return self.patchify(image), self.patchify(target.unsqueeze(0)).squeeze(1)
     
     def __len__(self):
-        return self.patches_per_image*len(self.dataset)
+        return len(self.dataset)
     
 class Patchify:
     def __init__(self, kernel_size, stride=1):
@@ -47,7 +43,7 @@ class Patchify:
     
     def num_patches(self, image_shape):
         padding = self.get_padding(image_shape)
-        return torch.prod(torch.tensor([(image_shape[i] + torch.sum(padding[i]).item() - self.kernel_size[i])//self.stride[i] + 1 for i in range(self.dimension)])).item()
+        return tuple((image_shape[i] + torch.sum(padding[i]).item() - self.kernel_size[i])//self.stride[i] + 1 for i in range(self.dimension))
     
     
 class Reconstruct:

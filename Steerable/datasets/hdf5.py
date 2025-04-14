@@ -2,6 +2,8 @@ import os
 import h5py
 import torch
 
+
+
 class HDF5Dataset:
     def __init__(self, filename : str, overwrite=False) -> None:
         self.filename = filename
@@ -16,50 +18,65 @@ class HDF5Dataset:
             f.close()
             
         else:
-            raise LookupError("File Already Exists! To overwrite it, set overwrite=True")
+            raise FileExistsError("File Already Exists! To overwrite it, set overwrite=True")
                 
         return
     
-    def _initialize_hdf5_dataset(self, name, input_shape, target_shape):
-        try:
-            print(f'Creating {name} dataset: ', end='')
-            self.file.create_dataset(name + '_inputs', (0, ) + input_shape, maxshape=(None,) +  input_shape, chunks=True)
-            self.file.create_dataset(name + '_targets', (0,) + target_shape, maxshape=(None,) +  target_shape, chunks=True)
-            print('Success!')
-        except Exception as e:
-            print(e)
+    def _initialize_hdf5_dataset(self, name, input_shape, target_shape, input_dtype, target_dtype):
+        print(f'Creating {name} dataset: ', end='')
+        self.file.create_dataset(name + '_inputs', (0, ) + input_shape, maxshape=(None,) +  input_shape, chunks=True, dtype=input_dtype)
+        self.file.create_dataset(name + '_targets', (0,) + target_shape, maxshape=(None,) +  target_shape, chunks=True, dtype=target_dtype)
+        print('Success!')
+
         return
 
-    def create_hdf5_dataset(self, name, dataset):
+    def create_hdf5_dataset(self, name, dataset, batched=False, variable_length=False):
         self.file = h5py.File(self.filename, 'a')
         input, target = dataset[0]
-        target = torch.tensor(target)
-        self._initialize_hdf5_dataset(name, input.shape, target.shape)
+        target = target if torch.is_tensor(target) else torch.tensor(target)
+        
+        input_shape = input.shape[1:] if batched else input.shape
+        target_shape = target.shape[1:] if batched else target.shape
+        
+        input_shape = () if variable_length else input_shape
+        target_shape = () if variable_length else target_shape
+        
+        input_data_type = h5py.special_dtype(vlen=input.numpy().dtype) if variable_length else input.numpy().dtype
+        target_dtype = h5py.special_dtype(vlen=target.numpy().dtype) if variable_length else target.numpy().dtype
+        
+        self._initialize_hdf5_dataset(name, input_shape, target_shape, input_data_type, target_dtype)
         
         for index in range(len(dataset)):
             try:
                 input, target = dataset[index]
-                self._write_into_hdf5_file(name, input, torch.tensor(target))
+                target = target if torch.is_tensor(target) else torch.tensor(target)
+                self._write_into_hdf5_file(name, input, target, batched, variable_length)
             except Exception as e:
                 print(f'Excpetion at {index + 1} : {e}')
                 
             print(f"Writing into {name} dataset : {index+1} / {len(dataset)}", end="\r")
-            
+        print()
         print('Done')
         self.file.close()
         
         return
 
-    def _write_into_hdf5_file(self, name : str, input, target):
+    def _write_into_hdf5_file(self, name, input, target, batched, variable_length):
         inputs = self.file[name + '_inputs']
         targets = self.file[name + '_targets']
-
-        inputs.resize((len(inputs) + 1,) + tuple(input.shape))
-        targets.resize((len(targets) + 1,) + tuple(target.shape))
         
+        input = input if batched else input.unsqueeze(0)
+        target = target if batched else target.unsqueeze(0)
         
-        inputs[-1] = input
-        targets[-1] = target
+        input = input.flatten(1) if variable_length else input
+        target = target.flatten(1) if variable_length else target
+        
+        inputs.resize((len(inputs) + len(input),) + tuple(inputs.shape[1:]))
+        targets.resize((len(targets) + len(target),) + tuple(targets.shape[1:]))
+            
+        inputs[-len(input):] = input
+        targets[-len(target):] = target
+            
         
         return 
     

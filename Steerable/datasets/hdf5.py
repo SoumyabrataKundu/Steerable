@@ -67,6 +67,7 @@ class HDF5Dataset:
         
         input = input if batched else input.unsqueeze(0)
         target = target if batched else target.unsqueeze(0)
+        assert input.shape[0] == target.shape[0]
         
         input = input.flatten(1) if variable_length else input
         target = target.flatten(1) if variable_length else target

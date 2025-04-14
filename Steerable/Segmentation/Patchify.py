@@ -74,12 +74,15 @@ class Reconstruct:
     def __call__(self, patches):
         if patches.shape[0] != self.weights.shape[0]:
             raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but {patches.shape[0]} were given.')
+        channel = len(patches.shape) == self.dimension+2
+        patches = patches if channel else patches.unsqueeze(1)
+        
         self.recon = self.weights.to(patches.device)*patches
         output = self._unfold(self.recon).reshape(-1, patches.shape[1], *self.pad_image_shape).sum(dim=0)
         slices = tuple(slice(self.padding[i,0], self.padding[i,0]+self.image_shape[i]) for i in range(self.dimension))
         output = output[(Ellipsis, )+slices]
 
-        return output
+        return output if channel else output[0]
 
     def _gaussian_kernel(self):
         coords = [torch.arange(0, k, 1) for k in self.kernel_size]
@@ -136,3 +139,6 @@ class Reconstruct:
     
     def get_num_patches_per_dim(self):
         return torch.tensor([(self.pad_image_shape[i] - self.kernel.shape[i])//self.stride[i] + 1 for i in range(self.dimension)])
+    
+    def num_patches(self):
+        return torch.prod(self.get_num_patches_per_dim())

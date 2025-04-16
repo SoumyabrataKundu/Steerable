@@ -114,7 +114,7 @@ class SE2Transformer(nn.Module):
     def forward(self, x):
         x = self.multihead_attention(self.layer_norm1(x)) + x
         x = self.positionwise_feedforward(self.layer_norm2(x)) + x
-        
+ 
         return x
     
 #######################################################################################################################

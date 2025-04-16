@@ -63,9 +63,10 @@ class Metrics:
     def dice_per_class(self):
         smooth = 1
         tp = torch.diagonal(self.confusion, dim1=-2, dim2=-1)
-        fp = torch.sum(self.confusion, dim=(-1, -2)) - tp
+        fp = torch.sum(self.confusion, dim=-1) - tp
+        fn = torch.sum(self.confusion, dim=-2) - tp
 
-        return torch.mean((tp + smooth) / (tp + fp + smooth), dim=0)
+        return torch.mean((2*tp + smooth) / (2*tp + fp + smooth), dim=0)
 
     def mDice(self):
         return torch.mean(self.dice_per_class()[1:]).item()

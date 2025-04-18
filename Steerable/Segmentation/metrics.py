@@ -66,7 +66,7 @@ class Metrics:
         fp = torch.sum(self.confusion, dim=-1) - tp
         fn = torch.sum(self.confusion, dim=-2) - tp
 
-        return torch.mean((2*tp + smooth) / (2*tp + fp + smooth), dim=0)
+        return torch.mean((2*tp + smooth) / (2*tp + fp + fn + smooth), dim=0)
 
     def mDice(self):
         return torch.mean(self.dice_per_class()[1:]).item()

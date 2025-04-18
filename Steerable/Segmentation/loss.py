@@ -154,6 +154,7 @@ class FocalLoss(torch.nn.Module):
             focal_loss = self.alpha * ((1 - pt) ** self.gamma) * ce_loss
         else:
             assert len(self.alpha) == preds.shape[1]
+            self.alpha = self.alpha.to(truth.device)
             alpha_t = self.alpha[truth]
             focal_loss = alpha_t * ((1 - pt) ** self.gamma) * ce_loss
         

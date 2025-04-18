@@ -22,9 +22,9 @@ class SE2MultiSelfAttention(nn.Module):
         self.dropout = ComplexDropout(p = dropout)
 
         # Layer Parameters
-        self.embeddings = nn.Parameter(torch.randn(3, 1, max_m, n_head, self.query_dim, transformer_dim, dtype = torch.float))
-        self.encoding = nn.Parameter(torch.randn(2, self.max_m, n_head, 1, self.query_dim, 1, dtype = torch.float))
-        self.out = nn.Parameter(torch.randn(max_m, transformer_dim, n_head * self.query_dim, dtype = torch.float))
+        self.embeddings = nn.Parameter(torch.randn(3, 1, max_m, n_head, self.query_dim, transformer_dim, dtype = torch.cfloat))
+        self.encoding = nn.Parameter(torch.randn(2, self.max_m, n_head, 1, self.query_dim, 1, dtype = torch.cfloat))
+        self.out = nn.Parameter(torch.randn(max_m, transformer_dim, n_head * self.query_dim, dtype = torch.cfloat))
 
         self.pos_enc = None
 
@@ -33,7 +33,7 @@ class SE2MultiSelfAttention(nn.Module):
         x = x.flatten(3) # shape : batch x max_m x channel x N
         
         # Query, Key and Value Embeddings
-        E = (self.embeddings.type(torch.cfloat) @ x.unsqueeze(2))
+        E = (self.embeddings @ x.unsqueeze(2))
         Q, K, V = torch.conj(E[0].transpose(-2,-1)), E[1], E[2]
         
         # Scores
@@ -44,7 +44,7 @@ class SE2MultiSelfAttention(nn.Module):
             if self.pos_enc ==  None:
                 self.pos_enc = get_pos_encod(x_shape[-2:], self.max_m).to(Q.device)
                 
-            pos = (self.encoding.type(torch.cfloat) * self.pos_enc)
+            pos = (self.encoding * self.pos_enc)
             A = A + (Q.unsqueeze(-2) @ pos[0]).squeeze(-2)
         
         # Attention Weights
@@ -58,25 +58,23 @@ class SE2MultiSelfAttention(nn.Module):
             result = result + (pos[1] @ A.unsqueeze(-1)).squeeze(-1).transpose(-2,-1)
         
         # Mixing Heads
-        result = self.out.type(torch.cfloat) @ result.flatten(2,3)
+        result = self.out @ result.flatten(2,3)
         result = result.reshape(*x_shape)
 
         return result
 
-        
-    
 #######################################################################################################################
 ############################################## Positionwise Feedforward ###############################################
 #######################################################################################################################    
 
-class PositionwiseFeedforward(nn.Module):
+class SE2PositionwiseFeedforward(nn.Module):
     def __init__(self, input_dim, hidden_dim, max_m, dropout = 0.1):
-        super(PositionwiseFeedforward, self).__init__()
+        super(SE2PositionwiseFeedforward, self).__init__()
 
         self.max_m = max_m
 
-        self.weights1 = nn.Parameter(torch.randn(max_m, hidden_dim, input_dim, dtype = torch.float))
-        self.weights2 = nn.Parameter(torch.randn(max_m, input_dim, hidden_dim, dtype = torch.float))
+        self.weights1 = nn.Parameter(torch.randn(max_m, hidden_dim, input_dim, dtype = torch.cfloat))
+        self.weights2 = nn.Parameter(torch.randn(max_m, input_dim, hidden_dim, dtype = torch.cfloat))
         self.dropout1 = ComplexDropout(p = dropout)
         self.dropout2 = ComplexDropout(p = dropout)
         
@@ -87,10 +85,10 @@ class PositionwiseFeedforward(nn.Module):
         x_shape = x.shape
         x = x.flatten(3) # shape : batch x max_m x channel x N
 
-        x = self.weights1.type(torch.cfloat) @ x
+        x = self.weights1 @ x
         x = self.nonlinearity(x)
         x = self.dropout1(x)
-        x = self.weights2.type(torch.cfloat) @ x
+        x = self.weights2 @ x
         x = self.dropout2(x)
         
         x = x.reshape(*x_shape)
@@ -106,7 +104,7 @@ class SE2Transformer(nn.Module):
 
         # Layer Design
         self.multihead_attention = SE2MultiSelfAttention(transformer_dim, n_head, max_m, dropout, add_pos_enc)
-        self.positionwise_feedforward = PositionwiseFeedforward(transformer_dim, hidden_dim, max_m, dropout)
+        self.positionwise_feedforward = SE2PositionwiseFeedforward(transformer_dim, hidden_dim, max_m, dropout)
 
         self.layer_norm1 = SE2BatchNorm()
         self.layer_norm2 = SE2BatchNorm()
@@ -151,7 +149,7 @@ class SE2TransformerDecoder(nn.Module):
             *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, dropout, add_pos_enc) for _ in range(n_layers)]
         )
 
-        self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.float))
+        self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
 
         self.norm = SE2BatchNorm()
         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
@@ -171,7 +169,7 @@ class SE2TransformerDecoder(nn.Module):
                           dtype=torch.cfloat, device=self.class_embed.device)
         class_embed = torch.cat((self.class_embed.expand(x_shape[0], 1, -1, -1), pad), dim=1)
 
-        x = torch.cat((x.flatten(3), class_embed.type(torch.cfloat)), -1)
+        x = torch.cat((x.flatten(3), class_embed), -1)
         x = self.norm(self.transformer_encoder(x))
         
         patches, cls_seg_feat = x[..., : -self.n_classes], x[..., -self.n_classes :]
@@ -183,51 +181,13 @@ class SE2TransformerDecoder(nn.Module):
 class SE2ClassEmbeddings(nn.Module):
     def __init__(self, transformer_dim, embedding_dim, max_m):
         super(SE2ClassEmbeddings, self).__init__()
-        self.weight = nn.Parameter(torch.randn(max_m, embedding_dim, transformer_dim, dtype=torch.float))
+        self.weight = nn.Parameter(torch.randn(max_m, embedding_dim, transformer_dim, dtype=torch.cfloat))
         
     def forward(self, x, classes):
-        classes = (self.weight.type(torch.cfloat) @ classes).flatten(1,2)
+        classes = (self.weight @ classes).flatten(1,2)
         result = torch.conj(classes).transpose(-2,-1) @ x.flatten(1,2).flatten(2)
         result = result.reshape(x.shape[0], classes.shape[-1], *x.shape[-2:])
         #x = torch.einsum('bmeXY, bmeC -> bCXY', x, torch.conj(classes))
         
         return result
    
-
-# class SE2ClassEmbeddings(nn.Module):
-#     def __init__(self, transformer_dim, embedding_dim, max_m):
-#         super(SE2ClassEmbeddings, self).__init__()
-
-#         self.weights = nn.Parameter(torch.randn(embedding_dim, transformer_dim, dtype=torch.float))
-#         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
-#                            for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
-
-#     def forward(self, x, classes):
-#         C = self.C.to(classes.device)
-#         classes = self.weights.type(torch.cfloat) @ classes
-#         x = torch.einsum('lmn, bmeXY, bneC -> blCXY', C, x, classes)
-
-#         return x 
-    
-#######################################################################################################################
-############################################# SE(2) Linear Decoder ####################################################
-#######################################################################################################################     
-
-class SE2LinearDecoder(nn.Module):
-    def __init__(self, transformer_dim, decoder_dim, max_m):
-        super(SE2LinearDecoder, self).__init__()
-
-        self.max_m = max_m
-        self.decoder_dim = decoder_dim
-        self.transformer_dim = transformer_dim
-
-        self.class_emb = nn.Parameter(torch.randn(max_m, decoder_dim, transformer_dim, dtype=torch.float))
-        self.norm = SE2BatchNorm()
-
-    def forward(self, x):
-        x_shape = x.shape
-        x = self.norm(x)
-        x = self.class_emb.type(torch.cfloat) @ x.flatten(3)
-        x = x.reshape(x.shape[0], self.max_m, -1, *x_shape[3:])
-        
-        return x

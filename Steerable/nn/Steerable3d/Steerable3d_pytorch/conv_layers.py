@@ -140,7 +140,7 @@ class SE3NormNonLinearity(nn.Module):
     def __init__(self, in_channels):
         super(SE3NormNonLinearity, self).__init__()
         
-        self.non_linearity = torch.nn.ReLU()
+        self.non_linearity = torch.nn.GELU()
         self.eps = 1e-5
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.b = nn.ParameterList([nn.Parameter(

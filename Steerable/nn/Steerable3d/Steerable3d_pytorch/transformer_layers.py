@@ -30,57 +30,12 @@ class SE3MultiSelfAttention(nn.Module):
         self.encoding = nn.ParameterList([nn.Parameter(
                                         torch.randn(2, n_head, 1, 1, dim, 1, dtype = torch.cfloat))
                                         for dim in self.query_dim])
-        # self.encoding1 = nn.ParameterList([nn.Parameter(
-        #                                 torch.randn(n_head, 1, 1, dim, 1, dtype = torch.cfloat))
-        #                                 for dim in self.query_dim])
-        # self.encoding2 = nn.ParameterList([nn.Parameter(
-        #                                 torch.randn(n_head, 1, 1, dim, 1, dtype = torch.cfloat))
-        #                                 for dim in self.query_dim])
         self.out = nn.ParameterList([nn.Parameter(
                                         torch.randn(dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
 
         self.pos_encod = None
-        
-    # def forward(self, x):
-    #     x_shape = x[0].shape
-        
-    #     if self.pos_encod is None and self.add_pos_enc:
-    #         self.pos_encod = get_pos_encod(x_shape[-3:], self.maxl)
-    #         self.pos_encod = [part.to(x[0].device) for part in self.pos_encod]
 
-    #     # Query Key Pair
-    #     A = torch.zeros(x_shape[0], self.n_head, *[prod(x_shape[3:])]*2, dtype=torch.cfloat, device = x[0].device)
-    #     B = []
-    #     for l in range(self.maxl+1):
-    #         # Embeddings
-    #         E = (self.embeddings[l] @ x[l].flatten(3))
-    #         E = E.reshape(3, x_shape[0], (2*l+1), self.n_head, self.query_dim[l], -1).transpose(2,3).flatten(3,4)
-    #         Q, K = torch.conj(E[0].transpose(-2,-1)), E[1]
-    #         B.append(E[2])
-
-    #         # Attention Scores
-    #         if self.add_pos_enc:
-    #             pos1 = (self.encoding1[l] * self.pos_encod[l]).flatten(2,3)
-    #             A = A + (Q @ K + (Q.unsqueeze(-2) @ pos1).squeeze(-2)) / sqrt(self.query_dim[l])
-    #         else:
-    #             A = A + (Q @ K) / sqrt(self.query_dim[l])
-            
-    #     A = nn.functional.softmax(A.abs(), dim=-1).type(torch.cfloat)
-        
-    #     # Output
-    #     result = []
-    #     for l in range(self.maxl+1):
-    #         V = B[l] @ A.transpose(-2,-1)
-    #         if self.add_pos_enc:
-    #             pos2 = (self.encoding2[l] * self.pos_encod[l]).flatten(2,3)
-    #             V = V + (pos2 @ A.unsqueeze(-1)).squeeze(-1).transpose(-2,-1)
-                
-    #         V = self.out[l] @ V.reshape(x_shape[0], self.n_head, 2*l+1, self.query_dim[l], -1).transpose(1,2).flatten(2,3)
-    #         result.append(V.reshape(x_shape[0], 2*l+1, self.transformer_dim[l], *x_shape[3:]))
-
-    #     return result
-    
     def forward(self, x):
         x_shape = x[0].shape
         
@@ -120,9 +75,9 @@ class SE3MultiSelfAttention(nn.Module):
 ################################################### SE(3) Transformer #################################################
 #######################################################################################################################
 
-class PositionwiseFeedforward(nn.Module):
+class SE3PositionwiseFeedforward(nn.Module):
     def __init__(self, input_dim, hidden_dim):
-        super(PositionwiseFeedforward, self).__init__()
+        super(SE3PositionwiseFeedforward, self).__init__()
 
         self.input_dim = [input_dim] if type(input_dim) is not list and type(input_dim) is not tuple else input_dim
         self.hidden_dim = [hidden_dim] if type(hidden_dim) is not list and type(hidden_dim) is not tuple else hidden_dim
@@ -156,7 +111,7 @@ class SE3Transformer(nn.Module):
 
         # Layer Design
         self.multihead_attention = SE3MultiSelfAttention(transformer_dim, n_head, add_pos_enc=add_pos_enc)
-        self.positionwise_feedforward = PositionwiseFeedforward(transformer_dim, hidden_dim)
+        self.positionwise_feedforward = SE3PositionwiseFeedforward(transformer_dim, hidden_dim)
 
         self.layer_norm1 = SE3BatchNorm()
         self.layer_norm2 = SE3BatchNorm()
@@ -258,30 +213,3 @@ class SE3ClassEmbedings(nn.Module):
         result = (torch.conj(classes).transpose(-2,-1) @ x.flatten(2)).reshape(x.shape[0], classes.shape[-1], *x.shape[2:])
         
         return result
-    
-    
-#######################################################################################################################
-############################################# SE(3) Linear Decoder ####################################################
-#######################################################################################################################     
-
-class SE3LinearDecoder(nn.Module):
-    def __init__(self, transformer_dim, decoder_dim):
-        super(SE3LinearDecoder, self).__init__()
-        
-        self.transformer_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
-        self.decoder_dim = [decoder_dim] if type(decoder_dim) is not list and type(decoder_dim) is not tuple else decoder_dim
-        
-        assert len(self.transformer_dim) == len(self.decoder_dim)
-
-        self.class_emb = nn.ParameterList([
-            nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(self.decoder_dim, self.transformer_dim)])
-        
-        self.norm = SE3BatchNorm()
-
-    def forward(self, x):
-        x_shape = x[0].shape
-        x = self.norm(x)
-        x = [(self.class_emb[l] @ part.flatten(3)).reshape(x_shape[0], 2*l+1, -1, *x_shape[3:]) 
-             for l, part in enumerate(x)]
-        
-        return x

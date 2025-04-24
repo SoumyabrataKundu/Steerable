@@ -238,7 +238,7 @@ class SE2NonLinearity(nn.Module):
 class SE2NormNonLinearity(nn.Module):
     '''
     This module takes the tensor applies non-linearity to absolute value of the tensor
-    The default non-linearity is ReLU.
+    The default non-linearity is GELU.
     '''
     def __init__(self, in_channels, max_m, nonlinearity = torch.nn.ReLU()):
         super(SE2NormNonLinearity, self).__init__()
@@ -250,7 +250,7 @@ class SE2NormNonLinearity(nn.Module):
         magnitude = x.abs() + self.eps
         b = self.b.reshape(1,*self.b.shape, *[1]*len(x.shape[3:]))
         factor = self.nonlinearity(magnitude + b) / magnitude
-        x = factor * x
+        x = (x.real * factor) + 1j*(x.imag * factor)
         return x
     
 #######################################################################################################################

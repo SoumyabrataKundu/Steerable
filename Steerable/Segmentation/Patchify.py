@@ -78,7 +78,7 @@ class Reconstruct:
         patches = patches if channel else patches.unsqueeze(1)
         
         self.recon = self.weights.to(patches.device)*patches
-        output = self._unfold(self.recon).reshape(-1, patches.shape[1], *self.pad_image_shape).sum(dim=0)
+        output = self._unfold(self.recon).reshape(-1, patches.shape[1], *self.pad_image_shape)[0]
         slices = tuple(slice(self.padding[i,0], self.padding[i,0]+self.image_shape[i]) for i in range(self.dimension))
         output = output[(Ellipsis, )+slices]
 
@@ -92,10 +92,7 @@ class Reconstruct:
         return -torch.sum((mesh-c)**2/(2*self.sigma**2), dim=-1)
     
     def _form_conv_transpose_input(self):
-        # number of placements vertically & horizontally
         N = torch.prod(self.num_patches_per_dim).item()
-
-        # Build the one-hot “input” map of shape (1, N, n_y, n_x)
         self.inp = torch.zeros(1, N, *self.num_patches_per_dim, device=self.kernel.device, dtype=self.kernel.dtype)
         coords  = [torch.arange(patch, device=self.kernel.device) for patch in self.num_patches_per_dim]
         grid = [v.flatten() for v in torch.meshgrid(*coords, indexing='ij')]
@@ -110,8 +107,8 @@ class Reconstruct:
         
         weight_val  = self.kernel.reshape(1,1,*self.kernel.shape).repeat(N,1,*[1]*self.dimension)
         weight_mask = torch.ones_like(weight_val)
-        out_val = self._unfold(weight_val).squeeze(0)
-        out_mask = self._unfold(weight_mask).squeeze(0)
+        out_val = self._unfold(weight_val, grouped=True).squeeze(0)
+        out_mask = self._unfold(weight_mask, grouped=True).squeeze(0)
 
         embedded_kernel = torch.nan_to_num(torch.softmax(torch.where(out_mask.bool(), out_val, fill_value), dim=0),0)
         unfolded_kernel = Patchify(kernel_size=self.kernel.shape, stride=self.stride)(embedded_kernel)
@@ -124,15 +121,15 @@ class Reconstruct:
             padding.append([ceil(p), floor(p)])
         return torch.tensor(padding)
     
-    def _unfold(self, weights):
+    def _unfold(self, weights, grouped=False):
         # Compute needed output_padding to exactly hit (H,W)
-        N = torch.prod(self.num_patches_per_dim).item()
         op = [self.pad_image_shape[i] - (self.num_patches_per_dim[i]-1)*self.stride[i] - self.kernel.shape[i] for i in range(self.dimension)]
+        groups = torch.prod(self.num_patches_per_dim).item() if grouped else 1
         
         if self.dimension == 2:
-            output = F.conv_transpose2d(self.inp.to(weights.device), weights, stride=self.stride, output_padding=op,groups=N)
+            output = F.conv_transpose2d(self.inp.to(weights.device), weights, stride=self.stride, output_padding=op,groups=groups)
         elif self.dimension==3:
-            output = F.conv_transpose3d(self.inp.to(weights.device), weights, stride=self.stride, output_padding=op,groups=N)
+            output = F.conv_transpose3d(self.inp.to(weights.device), weights, stride=self.stride, output_padding=op,groups=groups)
         else:
             raise ValueError(f'Only 2D and 3D kernel shape is supported.')
         return output

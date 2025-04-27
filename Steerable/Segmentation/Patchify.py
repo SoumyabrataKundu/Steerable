@@ -127,17 +127,13 @@ class Reconstruct(Patchify):
         
         return -torch.sum((mesh-c)**2/(2*self.sigma**2), dim=-1)
     
-    
-    def _get_weights(self, kernel, fill_value = -float('inf')):
-        weight_val  = kernel.reshape(1,*self.kernel.shape).repeat(self.num_patches,*[1]*self.dimension)
-        weight_mask = torch.ones_like(weight_val)
-        out_val = torch.zeros(self.num_patches, *self.pad_image_shape)
-        out_mask = torch.zeros_like(out_val)
-        
+    def _get_weights(self, kernel):
+        log_denominator = torch.empty(*self.pad_image_shape)
+        log_denominator.fill_(float('-inf'))
+        for pos in self.patch_positions:
+            log_denominator[pos] = torch.logaddexp(log_denominator[pos], kernel)
+        weights  = torch.empty(self.num_patches,*self.kernel_size)
         for i, pos in enumerate(self.patch_positions):
-            out_val[(i,)+pos] += weight_val[i]
-            out_mask[(i,)+pos] += weight_mask[i]
-        
-        embedded_kernel = torch.nan_to_num(torch.softmax(torch.where(out_mask.bool(), out_val, fill_value), dim=0),0)
-        unfolded_kernel = torch.stack([p  for p in Patchify(kernel_size=self.kernel.shape, stride=self.stride)(embedded_kernel)], dim=0)
-        return torch.movedim(torch.diagonal(unfolded_kernel, dim1=0, dim2=1), -1,0)
+            weights[i] = kernel - log_denominator[pos]
+        return torch.exp(weights)
+    

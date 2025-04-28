@@ -9,7 +9,9 @@ class PatchifyDataset(torch.utils.data.Dataset):
                
     def __getitem__(self, index):
         image, target = self.dataset[index]
-        return self.patchify(image), self.patchify(target.unsqueeze(0)).squeeze(1)
+        patched_image = torch.stack([p for p in self.patchify(image)], dim=0)
+        patched_target = torch.stack([p for p in self.patchify(target)], dim=0)
+        return patched_image, patched_target
     
     def __len__(self):
         return len(self.dataset)
@@ -106,7 +108,12 @@ class Reconstruct(Patchify):
     def __call__(self, patches):
         if len(patches) != self.weights.shape[0]:
             raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but {len(patches)} were given.')
-        
+        if torch.is_tensor(patches):
+            return self._reconstruct_from_tensor(patches=patches)
+        else:
+            return self._reconstruct_from_iter(patches=patches)
+    
+    def _reconstruct_from_iter(self, patches):
         patch = next(patches)
         patch_shape = patch.shape 
         self.weights = self.weights.to(patch.device)
@@ -114,6 +121,18 @@ class Reconstruct(Patchify):
         
         for i, (position, patch) in enumerate(zip(self.patch_positions, patches)):
             output[(Ellipsis,)+position] += self.weights[i]*patch
+        
+        slices = tuple(slice(self.padding[i,0], self.padding[i,0]+self.image_shape[i]) for i in range(self.dimension))
+        output = output[(Ellipsis, )+slices]
+
+        return output
+    
+    def _reconstruct_from_tensor(self, patches):        
+        self.weights = self.weights.to(patches.device)
+        output = torch.zeros(*patches.shape[1:-self.dimension], *self.pad_image_shape, device=patches.device)
+        
+        for i, position in enumerate(self.patch_positions):
+            output[(Ellipsis,)+position] += self.weights[i] * patches[i]
         
         slices = tuple(slice(self.padding[i,0], self.padding[i,0]+self.image_shape[i]) for i in range(self.dimension))
         output = output[(Ellipsis, )+slices]

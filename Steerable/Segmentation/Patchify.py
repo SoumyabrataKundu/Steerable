@@ -4,6 +4,7 @@ from math import floor, ceil
 class PatchifyDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, kernel_size, stride = 1):
         self.dataset = dataset
+        self.dimension = len(self.kernel_size)
         self.kernel_size = kernel_size
         self.patchify = Patchify(kernel_size, stride)
                
@@ -15,8 +16,7 @@ class PatchifyDataset(torch.utils.data.Dataset):
     
     def __len__(self):
         return len(self.dataset)
-    
-from math import ceil, floor
+
 class Patchify:
     def __init__(self, kernel_size, stride=1, transform=None) -> None:
         self.kernel_size = kernel_size
@@ -25,12 +25,10 @@ class Patchify:
         self.transform = transform
         
         if self.dimension != len(self.stride):
-            raise ValueError(f'kernel_size ({self.dimension}) should have same number of dimension as padding ({len(self.stride)}).') 
-        
-        pass 
+            raise ValueError(f'kernel_size ({self.dimension}) should have same number of dimension as padding ({len(self.stride)}).')  
     
-    def __call__(self, image):
-        return _ImagePatches(image, self.kernel_size, self.stride, self.transform)
+    def __call__(self, image, batch_size=None):
+        return _ImagePatches(image, self.kernel_size, self.stride, self.transform, batch_size)
     
     def get_padding(self, image_shape):
         padding = []
@@ -47,12 +45,14 @@ class Patchify:
         return torch.prod(self.get_num_patches_per_dim(image_shape))
     
 class _ImagePatches(Patchify):
-    def __init__(self, image, kernel_size, stride=1, transform=None) -> None:
+    def __init__(self, image, kernel_size, stride=1, transform=None, batch_size=None) -> None:
         self.kernel_size = kernel_size
         self.dimension = len(self.kernel_size)
         self.stride = stride
         self.transform = transform
         self.image = torch.nn.functional.pad(image, torch.flip(self.get_padding(image.shape[-self.dimension:]), [0]).flatten().tolist())
+        self.is_batch = batch_size != None
+        self.batch_size = batch_size if batch_size else 1
 
         self.num_patches_per_dim = self.get_num_patches_per_dim(self.image.shape[-self.dimension:])
         self.num_patches = self.get_num_patches(self.image.shape[-self.dimension:])
@@ -62,25 +62,19 @@ class _ImagePatches(Patchify):
         self._idx = 0            # cursor for iteration
         
     def __iter__(self):
-        self._idx = 0
-        return self
+        for idx in range(0,self.num_patches, self.batch_size):
+            if self.is_batch:
+                patch = torch.stack([self.image[(Ellipsis,) + self._patch_positions[j]]
+                                for j in range(idx, min(idx + self.batch_size, self.num_patches))], dim=0)
+            else:
+                patch = self.image[(Ellipsis,) + self._patch_positions[idx]]
+                
+            if self.transform:
+                patch = self.transform(patch)
+            yield patch
 
-    def __next__(self):
-        if self._idx >= self.num_patches:
-            raise StopIteration
-
-        index = self._idx
-        patch = self.image[(Ellipsis,) + self._patch_positions[index]]
-        if self.transform:
-            patch = self.transform(patch)
-        self._idx += 1
-
-        return patch
-    
     def __len__(self):
-        return self.num_patches
-    
-    
+        return ceil(self.num_patches / float(self.batch_size))
 
 class Reconstruct(Patchify):
     def __init__(self, kernel_size, image_shape, stride=1, sigma=1.0):
@@ -106,28 +100,34 @@ class Reconstruct(Patchify):
         self.weights = self._get_weights(self.kernel)
         
     def __call__(self, patches):
-        if len(patches) != self.weights.shape[0]:
-            raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but {len(patches)} were given.')
         if torch.is_tensor(patches):
             return self._reconstruct_from_tensor(patches=patches)
         else:
             return self._reconstruct_from_iter(patches=patches)
     
     def _reconstruct_from_iter(self, patches):
-        patch = next(patches)
-        patch_shape = patch.shape 
-        self.weights = self.weights.to(patch.device)
-        output = torch.zeros(*patch_shape[:-self.dimension], *self.pad_image_shape, device=patch.device)
+        if patches.num_patches != self.weights.shape[0]:
+            raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but {len(patches)} were given.')
         
-        for i, (position, patch) in enumerate(zip(self.patch_positions, patches)):
-            output[(Ellipsis,)+position] += self.weights[i]*patch
+        batch_size = patches.batch_size
+        patch = next(iter(patches))
+        patch = patch if patches.is_batch else patch.unsqueeze(0)
+        self.weights = self.weights.to(patch.device)
+        output = torch.zeros(*patch.shape[1:-self.dimension], *self.pad_image_shape, device=patch.device)
+        
+        for i, patch in enumerate(patches):
+            patch = patch if patches.is_batch else patch.unsqueeze(0)
+            for j in range(len(patch)):
+                output[(Ellipsis,)+self.patch_positions[batch_size*i + j]] += self.weights[batch_size*i + j]*patch[j]
         
         slices = tuple(slice(self.padding[i,0], self.padding[i,0]+self.image_shape[i]) for i in range(self.dimension))
         output = output[(Ellipsis, )+slices]
 
         return output
     
-    def _reconstruct_from_tensor(self, patches):        
+    def _reconstruct_from_tensor(self, patches):
+        if len(patches) != self.weights.shape[0]:
+            raise ValueError(f'Number of pacthes should be {self.weights.shape[0]}, but {len(patches)} were given.')
         self.weights = self.weights.to(patches.device)
         output = torch.zeros(*patches.shape[1:-self.dimension], *self.pad_image_shape, device=patches.device)
         

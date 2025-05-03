@@ -19,7 +19,7 @@ class Metrics:
             conf = torch.zeros(targets.shape[0], self.num_classes, self.num_classes, dtype=torch.int64)
             for i in range(self.num_classes):
                 for j in range(self.num_classes):
-                    conf[:,i,j] = torch.logical_and(targets==i, preds==j).flatten(1).sum(dim=-1)
+                    conf[:,i,j] = torch.logical_and(targets==i, preds==j).reshape(preds.shape[0], -1).sum(dim=-1)
             return conf
         else:
             raise ValueError('Either both preds and targets should be given or none of them.')
@@ -55,6 +55,7 @@ class Metrics:
     #####################################################################################################
     ################################################ IOU ################################################
     #####################################################################################################
+
     def iou_per_class(self, preds=None, targets=None):
         conf = self.get_confusion_matrix(preds, targets)
         tp = torch.diagonal(conf, dim1=-2, dim2=-1)
@@ -74,3 +75,25 @@ class Metrics:
         fn = (torch.sum(conf, dim=-2) - tp)[1:].sum()
         
         return torch.nan_to_num(tp / (tp + fp + fn), 1).item()
+
+    #####################################################################################################
+    ################################################ Accuracy ###########################################
+    #####################################################################################################
+
+    def acc_per_class(self, preds=None, targets=None):
+        conf = self.get_confusion_matrix(preds, targets)
+        tp = torch.diagonal(conf, dim1=-2, dim2=-1)
+        fp = torch.sum(conf, dim=-1) - tp
+
+        iou = torch.nan_to_num(tp / (tp + fp), 1)
+        return iou if preds is None else iou.mean(dim=0)
+
+    def mAcc(self, preds=None, targets=None):
+        return torch.mean(self.acc_per_class(preds, targets)[1:]).item()
+
+
+    def MAcc(self):
+        conf = self.confusion
+        tp = torch.diagonal(conf, dim1=-2, dim2=-1).sum()
+
+        return torch.nan_to_num(tp / conf.sum(), 1).item()

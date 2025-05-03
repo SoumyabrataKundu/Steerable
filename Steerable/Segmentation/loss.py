@@ -142,9 +142,10 @@ class BinaryCombinedLoss(nn.Module):
 ##################################################################################################### 
     
 class FocalLoss(torch.nn.Module):
-    def __init__(self, alpha=1, gamma=2):
+    def __init__(self, alpha=1, beta=1, gamma=2):
         super(FocalLoss, self).__init__()
         self.alpha = alpha if torch.is_tensor(alpha) else torch.tensor(alpha)
+        self.alpha = (self.alpha ** beta) / torch.sum(self.alpha ** beta)
         self.gamma = gamma
 
     def forward(self, preds, truth):

@@ -2,7 +2,7 @@ import torch
 
 class Metrics:
     def __init__(self, num_classes, metric='dice'):
-        if isinstance(num_classes) is not int or num_classes<0:
+        if num_classes<0:
             raise ValueError(f"num_classes {num_classes} must be an integer greated than 0.")
         if metric not in ['dice', 'iou', 'accuracy']:
             raise ValueError(f"metric ({metric}) must be one of 'dice', 'iou' or 'accuracy'.")

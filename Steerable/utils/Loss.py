@@ -2,6 +2,41 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+#####################################################################################################
+######################################### Focal Loss ################################################
+##################################################################################################### 
+    
+class FocalLoss(torch.nn.Module):
+    def __init__(self, alpha=1, gamma=2):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha if torch.is_tensor(alpha) else torch.tensor(alpha)
+        self.gamma = gamma
+
+    def forward(self, preds, truth):
+        ce_loss = torch.nn.functional.cross_entropy(preds, truth, reduction='none')
+        pt = torch.exp(-ce_loss)
+        if self.alpha.ndimension() == 0:
+            focal_loss = self.alpha * ((1 - pt) ** self.gamma) * ce_loss
+        else:
+            assert len(self.alpha) == preds.shape[1]
+            self.alpha = self.alpha.to(truth.device)
+            alpha_t = self.alpha[truth]
+            focal_loss = alpha_t * ((1 - pt) ** self.gamma) * ce_loss
+        
+        return focal_loss.mean()
+    
+class BinaryFocalLoss(nn.Module):
+    def __init__(self, alpha=1, gamma=2):
+        super(BinaryFocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, preds, truth):
+        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(preds.squeeze(1), truth.float(), reduction='none')
+        focal_loss = self.alpha * ((1 - torch.exp(-ce_loss)) ** self.gamma) * ce_loss
+        return focal_loss.mean()
+
 #####################################################################################################
 ########################################## Dice Loss ################################################
 ##################################################################################################### 
@@ -79,9 +114,6 @@ class BinaryJaccardLoss(nn.Module):
         
         return 1 - jaccard_coeff.mean()
 
-
-
-
     
 #####################################################################################################
 ################################## Pixel Cross Entropy Loss #########################################
@@ -138,42 +170,6 @@ class BinaryCombinedLoss(nn.Module):
         return self.weight_ce * ce_loss + self.weight_dice * dice_loss
     
 #####################################################################################################
-######################################### Focal Loss ################################################
-##################################################################################################### 
-    
-class FocalLoss(torch.nn.Module):
-    def __init__(self, alpha=1, beta=1, gamma=2):
-        super(FocalLoss, self).__init__()
-        self.alpha = alpha if torch.is_tensor(alpha) else torch.tensor(alpha)
-        self.alpha = (self.alpha ** beta) / torch.sum(self.alpha ** beta)
-        self.gamma = gamma
-
-    def forward(self, preds, truth):
-        ce_loss = torch.nn.functional.cross_entropy(preds, truth, reduction='none')
-        pt = torch.exp(-ce_loss)
-        if self.alpha.ndimension() == 0:
-            focal_loss = self.alpha * ((1 - pt) ** self.gamma) * ce_loss
-        else:
-            assert len(self.alpha) == preds.shape[1]
-            self.alpha = self.alpha.to(truth.device)
-            alpha_t = self.alpha[truth]
-            focal_loss = alpha_t * ((1 - pt) ** self.gamma) * ce_loss
-        
-        return focal_loss.mean()
-    
-class BinaryFocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2):
-        super(BinaryFocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-
-    def forward(self, preds, truth):
-        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(preds.squeeze(1), truth.float(), reduction='none')
-        focal_loss = self.alpha * ((1 - torch.exp(-ce_loss)) ** self.gamma) * ce_loss
-        return focal_loss.mean()
-    
-    
-#####################################################################################################
 ######################################### Tversky Loss ##############################################
 ##################################################################################################### 
     
@@ -221,57 +217,3 @@ class BinaryTverskyLoss(nn.Module):
 
         return tversky_index.mean()
 
-    
-#####################################################################################################
-###################################### Segmentation Loss ############################################
-##################################################################################################### 
-    
-class SegmentationLoss(nn.Module):
-    def __init__(self, loss_type : str = "Dice", **kwargs) -> None:
-        super(SegmentationLoss, self).__init__()
-        
-        # Multiclass
-        if loss_type == "Dice":
-            self.criterion = DiceLoss(**kwargs)
-        elif loss_type == "Jaccard":
-            self.criterion = JaccardLoss(**kwargs)
-        elif loss_type == "CrossEntropy":
-            self.criterion = PixelCrossEntropyLoss(**kwargs)
-        elif loss_type == "Combined":
-            self.criterion = CombinedLoss(**kwargs)
-        elif loss_type == "Focal":
-            self.criterion = FocalLoss(**kwargs)
-        elif loss_type == "Tversky":
-            self.criterion = TverskyLoss(**kwargs)
-        
-        # Binary
-        elif loss_type == "BinaryDice":
-            self.criterion = BinaryDiceLoss(**kwargs)
-        elif loss_type == "BinaryJaccard":
-            self.criterion = BinaryJaccardLoss(**kwargs)
-        elif loss_type == "BinaryCrossEntropy":
-            self.criterion = BinaryPixelCrossEntropyLoss(**kwargs)
-        elif loss_type == "BinaryCombined":
-            self.criterion = BinaryCombinedLoss(**kwargs)
-        elif loss_type == "BinaryFocal":
-            self.criterion = BinaryFocalLoss(**kwargs)
-        elif loss_type == "BinaryTversky":
-            self.criterion = BinaryTverskyLoss(**kwargs) 
-        else:
-            raise ValueError("loss_type is unknown.")
-        
-        
-    def forward(self, pred, truth):
-        loss = self.criterion(pred, truth)
-        return loss
-        
-        
-        
-        
-        
-# Usage
-
-# criterion = SegmentationLoss(loss_type="Dice")
-# pred = torch.randn(5, 11, 60, 60)
-# truth = torch.randint(0, 11, (5, 60, 60))
-# criterion(pred, truth)

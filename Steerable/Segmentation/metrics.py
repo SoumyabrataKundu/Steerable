@@ -53,9 +53,10 @@ class Metrics:
     
     def micro(self, preds=None, targets=None):
         conf = self.get_confusion_matrix(preds, targets)
-        tp = torch.diagonal(conf, dim1=-2, dim2=-1)[:,1:].sum()
+        tp = torch.diagonal(conf, dim1=-2, dim2=-1)
         fp = (torch.sum(conf, dim=-1) - tp)[:,1:].sum()
         fn = (torch.sum(conf, dim=-2) - tp)[:,1:].sum()
+        tp = tp[:,1:].sum()
             
         return torch.nan_to_num(self._get_score(tp,fp,fn), 1).item()
 

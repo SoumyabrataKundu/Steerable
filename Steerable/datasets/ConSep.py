@@ -89,7 +89,15 @@ class ConSepReconstruct(torch.utils.data.Dataset):
             target[loc] = self.target_transform(os.path.join(self.data_path,'labels', target_patch))
             
         return image, target
-
+    
+    def __len__(self):
+        index = 0
+        while True:
+            image_patches = [s for s in self.image_files if s.startswith(f"{self.mode}_{index+1}_")]
+            if not image_patches:
+                break
+            index +=1 
+        return index
 
 #####################################################################################################
 ######################################## Main Function ##############################################

@@ -2,7 +2,7 @@ import torch
 
 class Metrics:
     def __init__(self, num_classes, metric='dice'):
-        if num_classes<0:
+        if num_classes<=0:
             raise ValueError(f"num_classes {num_classes} must be an integer greated than 0.")
         if metric not in ['dice', 'iou', 'accuracy']:
             raise ValueError(f"metric ({metric}) must be one of 'dice', 'iou' or 'accuracy'.")
@@ -41,25 +41,24 @@ class Metrics:
         return torch.nan_to_num(self._get_score(tp,fp,fn), 1).mean(dim=0)
 
     def macro(self, preds=None, targets=None):
-        return torch.mean(self.macro_per_class(preds, targets)[1:]).item()
+        return torch.mean(self.macro_per_class(preds, targets)).item()
     
     def micro_per_class(self, preds=None, targets=None):
         conf = self.get_confusion_matrix(preds, targets)
         tp = torch.diagonal(conf, dim1=-2, dim2=-1).sum(dim=0)
         fp = (torch.sum(conf, dim=-1) - tp).sum(dim=0)
         fn = (torch.sum(conf, dim=-2) - tp).sum(dim=0)
-            
+
         return torch.nan_to_num(self._get_score(tp,fp,fn), 1)
     
     def micro(self, preds=None, targets=None):
         conf = self.get_confusion_matrix(preds, targets)
         tp = torch.diagonal(conf, dim1=-2, dim2=-1)
-        fp = (torch.sum(conf, dim=-1) - tp)[:,1:].sum()
-        fn = (torch.sum(conf, dim=-2) - tp)[:,1:].sum()
-        tp = tp[:,1:].sum()
+        fp = (torch.sum(conf, dim=-1) - tp).sum()
+        fn = (torch.sum(conf, dim=-2) - tp).sum()
+        tp = tp.sum()
             
         return torch.nan_to_num(self._get_score(tp,fp,fn), 1).item()
-
 
     def _get_score(self, tp, fp, fn):
         if self.metric == 'dice':
@@ -69,6 +68,6 @@ class Metrics:
             score = tp / (tp + fp + fn)
         
         elif self.metric == 'accuracy':
-            score = tp / (tp + fp)
+            score = tp / (tp + fn)
             
         return score

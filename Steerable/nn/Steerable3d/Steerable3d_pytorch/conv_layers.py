@@ -2,12 +2,6 @@ import torch
 import torch.nn as nn
 from numpy import prod
 
-gelib_installed = True
-try:
-    import gelib
-except:
-    gelib_installed = False
-
 from Steerable.nn.Steerable3d.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 
 ##################################################################################################################################
@@ -113,6 +107,11 @@ class SE3Conv(nn.Module):
 
 class SE3CGNonLinearity(nn.Module):
     def __init__(self, in_channels):
+        try:
+            import gelib
+        except:
+            raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
+
         super(SE3CGNonLinearity, self).__init__()
 
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
@@ -127,9 +126,6 @@ class SE3CGNonLinearity(nn.Module):
                                         torch.randn(hidden_dim * size[l], in_channels[l], dtype = torch.cfloat))
                                          for l in range(self.maxl + 1)])
     def forward(self, x):
-        if not gelib_installed:
-            raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
-        
         inputs = gelib.SO3vecArr()
         inputs.parts = [x[l].permute(0,3,4,5,1,2) @ self.weights1[l] for l in range(self.maxl+1)]
         inputs = gelib.DiagCGproduct(inputs,inputs,self.maxl)

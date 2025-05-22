@@ -151,7 +151,7 @@ class SE3NormNonLinearity(nn.Module):
             result.append(part * factor)
         
         return result
-    
+
 class SE3GatedNonLinearity(nn.Module):
     def __init__(self, in_channels, kernel_size, n_radius, n_theta):
         super(SE3GatedNonLinearity, self).__init__()
@@ -170,8 +170,7 @@ class SE3GatedNonLinearity(nn.Module):
             split_index += self.in_channels[l]
         
         return result
-            
-            
+  
 #######################################################################################################################
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
@@ -189,7 +188,7 @@ class SE3BatchNorm(nn.Module):
             result.append(part)
         
         return result
-    
+
 #######################################################################################################################
 ################################################## Average Pooling Layer ##############################################
 #######################################################################################################################  
@@ -203,7 +202,6 @@ class SE3AvgPool(nn.Module):
         x, channels = merge_channel_dim(x)
         x = self.pool(x.real) + 1j*self.pool(x.imag)
         return split_channel_dim(x, channels)
-
 
 #######################################################################################################################
 ################################################### Invariant Layers ##################################################

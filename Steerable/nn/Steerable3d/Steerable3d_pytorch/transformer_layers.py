@@ -33,7 +33,6 @@ class SE3MultiSelfAttention(nn.Module):
         self.out = nn.ParameterList([nn.Parameter(
                                         torch.randn(dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
-
         self.pos_encod = None
 
     def forward(self, x):
@@ -100,7 +99,7 @@ class SE3PositionwiseFeedforward(nn.Module):
         x = [(self.weights2[l] @ part.flatten(3)).reshape(x_shape[0], 2*l+1, -1, *x_shape[3:]) for l,part in enumerate(x)]
          
         return x
-    
+
 #######################################################################################################################
 ################################################### SE(3) Transformer #################################################
 #######################################################################################################################
@@ -137,8 +136,7 @@ class SE3TransformerEncoder(nn.Module):
         x = self.transformer_encoder(x)
         
         return x
-    
-    
+
 #######################################################################################################################
 ############################################## SE(3) Transformer Decoder ##############################################
 ####################################################################################################################### 
@@ -168,8 +166,7 @@ class SE3TransformerDecoder(nn.Module):
                 self.pos_encod[l][:pos[l].shape[0], :,:,:pos[l].shape[3]] = pos[l]
             for module in self.transformer_encoder:
                 module.multihead_attention.pos_encod = self.pos_encod
-                
-        
+
         result = []
         x_shape = x[0].shape
         for l, part in enumerate(x):
@@ -191,7 +188,7 @@ class SE3TransformerDecoder(nn.Module):
         
   
         return patches, cls_seg_feat
-    
+
 class SE3ClassEmbedings(nn.Module):
     def __init__(self, transformer_dim, embedding_dim):
         super(SE3ClassEmbedings, self).__init__()

@@ -257,59 +257,17 @@ class SE2NormNonLinearity(nn.Module):
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-# class SE2BatchNorm(nn.Module):
-#     def __init__(self, n_channels, max_m):
-#         super(SE2BatchNorm, self).__init__()
-#         self.eps = 1e-5
-
-#     def forward(self, x):
-#         #factor = x.abs() + self.eps
-#         factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
-#         x = (x.real/factor) + 1j*(x.imag/factor)
-
-#         return x
-
-class SE2BatchNorm(torch.nn.Module):
-    def __init__(self, in_channels, max_m, momentum = 0.1, track_running_stats = True):
-        super().__init__()
-        self.in_channels = in_channels
-        self.max_m = max_m
+class SE2BatchNorm(nn.Module):
+    def __init__(self):
+        super(SE2BatchNorm, self).__init__()
         self.eps = 1e-5
-        self.momentum = momentum
-        self.track_running_stats = track_running_stats
-        
-        self.weight = torch.nn.Parameter(torch.randn(max_m, in_channels, 1))
-        self.bias = torch.nn.Parameter(torch.zeros(max_m, in_channels, 1))
-            
-        if self.track_running_stats:
-            self.running_mean = torch.zeros(1,max_m, in_channels,1)
-            self.running_var = torch.ones(1,max_m, in_channels,1)
-            self.num_batches_tracked = torch.tensor(0, dtype=torch.long)
-        
+
     def forward(self, x):
-        x_shape = x.shape
-        x = x.flatten(3)
-        assert x.shape[1] == self.max_m, "Fourier Frequency mismatch"
-        assert x.shape[2] == self.in_channels, "channel mismatch"
-        
+        #factor = x.abs() + self.eps
+        factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
+        x = (x.real/factor) + 1j*(x.imag/factor)
 
-        if self.training or not self.track_running_stats:
-            mean = x.mean(dim=(0, 3), keepdim=True)                                         # shape (1,K,C,1)
-            var = x.var(dim=(0, 3), unbiased=False, keepdim=True).sum(dim=0, keepdim=True)  # shape (1,1,C,1)
-
-            if self.track_running_stats:
-                with torch.no_grad():
-                    self.running_mean = (1 - self.momentum) * self.running_mean.to(mean.device) + self.momentum * mean
-                    self.running_var = (1 - self.momentum) * self.running_var.to(var.device) + self.momentum * var
-                    self.num_batches_tracked += 1
-        else:
-            mean = self.running_mean
-            var = self.running_var
-            
-        x = x - mean
-        x = (x.real/torch.sqrt(var + self.eps)) + 1j*(x.imag/torch.sqrt(var + self.eps))
-        x = x * self.weight + self.bias
-        return x.reshape(*x_shape)
+        return x
 
 #######################################################################################################################
 ################################################## Average Pooling Layer ##############################################

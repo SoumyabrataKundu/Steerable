@@ -106,8 +106,8 @@ class SE2Transformer(nn.Module):
         self.multihead_attention = SE2MultiSelfAttention(transformer_dim, n_head, max_m, dropout, add_pos_enc)
         self.positionwise_feedforward = SE2PositionwiseFeedforward(transformer_dim, hidden_dim, max_m, dropout)
 
-        self.layer_norm1 = SE2BatchNorm()
-        self.layer_norm2 = SE2BatchNorm()
+        self.layer_norm1 = SE2BatchNorm(transformer_dim, max_m)
+        self.layer_norm2 = SE2BatchNorm(transformer_dim, max_m)
 
     def forward(self, x):
         x = self.multihead_attention(self.layer_norm1(x)) + x
@@ -150,7 +150,7 @@ class SE2TransformerDecoder(nn.Module):
 
         self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
 
-        self.norm = SE2BatchNorm()
+        self.norm = SE2BatchNorm(transformer_dim, max_m)
         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
                            for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
 

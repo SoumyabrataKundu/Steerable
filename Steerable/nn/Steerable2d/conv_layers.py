@@ -190,9 +190,7 @@ class SE2DeConvType2(_SE2DeConv, SE2ConvType2):
                                            n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, restricted=restricted)
-            
-   
-   
+        
 #######################################################################################################################
 ################################################### Non-linearity #####################################################
 #######################################################################################################################

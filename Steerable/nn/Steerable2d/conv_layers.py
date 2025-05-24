@@ -278,24 +278,24 @@ class SE2BatchNorm(torch.nn.Module):
         self.momentum = momentum
         self.track_running_stats = track_running_stats
         
-        self.weight = torch.nn.Parameter(torch.randn(max_m, in_channels, 1, 1))
-        self.bias = torch.nn.Parameter(torch.zeros(max_m, in_channels, 1, 1))
+        self.weight = torch.nn.Parameter(torch.randn(max_m, in_channels, 1))
+        self.bias = torch.nn.Parameter(torch.zeros(max_m, in_channels, 1))
             
         if self.track_running_stats:
-            self.running_mean = torch.zeros(1,max_m, in_channels,1,1)
-            self.running_var = torch.ones(1,max_m, in_channels,1,1)
+            self.running_mean = torch.zeros(1,max_m, in_channels,1)
+            self.running_var = torch.ones(1,max_m, in_channels,1)
             self.num_batches_tracked = torch.tensor(0, dtype=torch.long)
         
     def forward(self, x):
-        if x.dim() != 5:
-            raise ValueError(f"Expected 5-D input (N, K, C, H, W) but got {x.dim()}-D tensor")
-
+        x_shape = x.shape
+        x = x.flatten(3)
         assert x.shape[1] == self.max_m, "Fourier Frequency mismatch"
         assert x.shape[2] == self.in_channels, "channel mismatch"
+        
 
         if self.training or not self.track_running_stats:
-            mean = x.mean(dim=(0, 3, 4), keepdim=True)                                         # shape (1,K,C,1,1)
-            var = x.var(dim=(0, 3, 4), unbiased=False, keepdim=True).sum(dim=0, keepdim=True)  # shape (1,1,C,1,1)
+            mean = x.mean(dim=(0, 3), keepdim=True)                                         # shape (1,K,C,1)
+            var = x.var(dim=(0, 3), unbiased=False, keepdim=True).sum(dim=0, keepdim=True)  # shape (1,1,C,1)
 
             if self.track_running_stats:
                 with torch.no_grad():
@@ -308,7 +308,8 @@ class SE2BatchNorm(torch.nn.Module):
             
         x = x - mean
         x = (x.real/torch.sqrt(var + self.eps)) + 1j*(x.imag/torch.sqrt(var + self.eps))
-        return x * self.weight + self.bias
+        x = x * self.weight + self.bias
+        return x.reshape(*x_shape)
 
 #######################################################################################################################
 ################################################## Average Pooling Layer ##############################################

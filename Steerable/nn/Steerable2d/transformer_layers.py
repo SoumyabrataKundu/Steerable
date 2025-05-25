@@ -145,11 +145,11 @@ class SE2TransformerDecoder(nn.Module):
         self.n_classes = n_classes
         self.max_m = max_m
         
+        self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
+        self.decoder_proj = nn.Parameter(torch.randn(max_m, transformer_dim, transformer_dim, dtype=torch.cfloat))
         self.transformer_encoder = torch.nn.Sequential(
             *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, dropout, add_pos_enc) for _ in range(n_layers)]
         )
-
-        self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
 
         self.norm = SE2BatchNorm()
         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
@@ -169,13 +169,13 @@ class SE2TransformerDecoder(nn.Module):
                           dtype=torch.cfloat, device=self.class_embed.device)
         class_embed = torch.cat((self.class_embed.expand(x_shape[0], 1, -1, -1), pad), dim=1)
 
-        x = torch.cat((x.flatten(3), class_embed), -1)
+        x = self.decoder_proj @ x.flatten(3)
+        x = torch.cat((x, class_embed), -1)
         x = self.norm(self.transformer_encoder(x))
         
         patches, cls_seg_feat = x[..., : -self.n_classes], x[..., -self.n_classes :]
         patches = patches.reshape(x_shape[0], self.max_m, -1, *x_shape[3:])
-        
-  
+          
         return patches, cls_seg_feat
 
 class SE2ClassEmbeddings(nn.Module):

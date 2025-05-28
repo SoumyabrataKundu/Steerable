@@ -4,8 +4,8 @@ from math import floor, ceil
 class PatchifyDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, kernel_size, stride = 1):
         self.dataset = dataset
-        self.dimension = len(self.kernel_size)
         self.kernel_size = kernel_size
+        self.dimension = len(self.kernel_size)
         self.patchify = Patchify(kernel_size, stride)
                
     def __getitem__(self, index):

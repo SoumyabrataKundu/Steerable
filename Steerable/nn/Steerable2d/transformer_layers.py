@@ -1,7 +1,8 @@
 import torch 
 import torch.nn as nn
 from math import sqrt
-from Steerable.nn.Steerable2d.utils import get_pos_encod, get_CG_matrix
+
+from Steerable.nn.Steerable2d.utils import get_pos_encod
 from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNorm, ComplexDropout
         
 #######################################################################################################################
@@ -150,13 +151,14 @@ class SE2TransformerDecoder(nn.Module):
         )
 
         self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
-        #self.decoder_proj = nn.Parameter(torch.randn(max_m, transformer_dim, transformer_dim, dtype=torch.cfloat))
+
         self.norm = SE2BatchNorm()
         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
                            for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
 
         self.pos_enc = None
     def forward(self, x):
+        # Positional Encoding
         if self.pos_enc == None:
             pos = get_pos_encod(x.shape[-2:], self.max_m).to(x.device)
             self.pos_enc = torch.zeros(self.max_m, 1, pos.shape[2]+self.n_classes, 1, pos.shape[4]+self.n_classes, dtype=torch.cfloat, device=x.device)
@@ -164,30 +166,28 @@ class SE2TransformerDecoder(nn.Module):
             for module in self.transformer_encoder:
                 module.multihead_attention.pos_enc = self.pos_enc
         
+        # Transformer
         x_shape = x.shape
-        pad = torch.zeros(x_shape[0], self.max_m-1, self.transformer_dim, self.n_classes, 
-                          dtype=torch.cfloat, device=self.class_embed.device)
+        pad = torch.zeros(x_shape[0], self.max_m-1, self.transformer_dim, self.n_classes, dtype=torch.cfloat, device=self.class_embed.device)
         class_embed = torch.cat((self.class_embed.expand(x_shape[0], 1, -1, -1), pad), dim=1)
-
-        x = x.flatten(3)
-        x = torch.cat((x, class_embed), -1)
+        x = torch.cat((x.flatten(3), class_embed), -1)
         x = self.norm(self.transformer_encoder(x))
-        
+
+        # Masks        
         patches, cls_seg_feat = x[..., : -self.n_classes], x[..., -self.n_classes :]
         patches = patches.reshape(x_shape[0], self.max_m, -1, *x_shape[3:])
         
-  
         return patches, cls_seg_feat
 
 class SE2ClassEmbeddings(nn.Module):
     def __init__(self, transformer_dim, embedding_dim, max_m):
         super(SE2ClassEmbeddings, self).__init__()
         self.weight = nn.Parameter(torch.randn(max_m, embedding_dim, transformer_dim, dtype=torch.cfloat))
-        self.CG_matrix = get_CG_matrix(max_m) 
+        
     def forward(self, x, classes):
-        classes = self.weight @ classes
-        #result = torch.conj(classes).transpose(-2,-1) @ x.flatten(1,2).flatten(2)
-        #result = result.reshape(x.shape[0], classes.shape[-1], *x.shape[-2:])
-        result = torch.einsum('lmn, bmexy, bnec -> blcxy', self.CG_matrix.to(x.device), x, classes)
+        classes = (self.weight @ classes).flatten(1,2)
+        result = torch.conj(classes).transpose(-2,-1) @ x.flatten(1,2).flatten(2)
+        result = result.reshape(x.shape[0], classes.shape[-1], *x.shape[-2:])
+        
         return result
    

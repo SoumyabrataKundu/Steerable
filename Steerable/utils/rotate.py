@@ -7,7 +7,7 @@ class RotateImage:
     
     def rotate_image_slice(self, image_slice, degree):
         if image_slice.ndim == 2:
-            image_slice = torch.from_numpy(rotate(image_slice, degree, (1,0), reshape=False, order=self.order))
+            image_slice = torch.from_numpy(rotate(image_slice, degree[0], (1,0), reshape=False, order=self.order))
         if image_slice.ndim == 3:
             image_slice = torch.from_numpy(rotate(image_slice, degree[0], (1,0), reshape=False, order=self.order))
             image_slice = torch.from_numpy(rotate(image_slice, degree[1], (0,2), reshape=False, order=self.order))

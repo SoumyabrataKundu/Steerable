@@ -14,7 +14,7 @@ class RandomRotate:
             inputs = rotate_2D_image(inputs, degree, order=1)
             targets = rotate_2D_image(targets, degree, order=0)
         elif targets.ndim == 3:
-            degree = torch.randint(0, 360, (3,)).item()
+            degree = torch.randint(0, 360, (3,))
             inputs = rotate_3D_image(inputs, degree, order=1)
             targets = rotate_3D_image(targets, degree, order=0)
         else:

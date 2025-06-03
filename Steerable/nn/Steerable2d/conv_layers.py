@@ -34,7 +34,7 @@ class _SE2Conv(nn.Module):
         self.kernel = None
 
         # Fint Matrix
-        self.Fint = get_Fint_matrix(self.kernel_size, n_radius, n_theta, self.max_m, interpolation_type)
+        self.register_buffer('Fint', get_Fint_matrix(self.kernel_size, n_radius, n_theta, self.max_m, interpolation_type))
         
 
     def forward(self, x):
@@ -46,7 +46,7 @@ class _SE2Conv(nn.Module):
             # Convolution
             batch_size = x.shape[0]
             x = x.reshape(batch_size, -1, self.in_channels, *x.shape[-2:]).transpose(1,2).flatten(0,1)
-            x = torch.conv2d(x, self.Fint.to(x.device), stride=self.stride, padding = self.padding, dilation=self.dilation, groups=self.groups)
+            x = torch.conv2d(x, self.Fint, stride=self.stride, padding = self.padding, dilation=self.dilation, groups=self.groups)
             out_res = x.shape[-2:]
             x = x.reshape(batch_size, -1, self.max_m, self.n_radius, prod(out_res)).transpose(1,2).flatten(2,3)
             
@@ -60,7 +60,7 @@ class _SE2Conv(nn.Module):
             
             # Convolution
             x = x.reshape(x.shape[0], -1, *x.shape[-2:])
-            x = torch.conv2d(x, self.kernel.to(x.device), stride=self.stride, padding = self.padding, dilation=self.dilation)
+            x = torch.conv2d(x, self.kernel, stride=self.stride, padding = self.padding, dilation=self.dilation)
             x = x.reshape(x.shape[0], self.max_m, self.out_channels, *x.shape[-2:])
             
 
@@ -68,7 +68,7 @@ class _SE2Conv(nn.Module):
     
     def get_kernel(self):
         # Kernel Preparation
-        kernel = (self.weights @ self.Fint.to(self.weights.device)).reshape(self.max_m * self.out_channels, -1, *self.kernel_size)
+        kernel = (self.weights @ self.Fint).reshape(self.max_m * self.out_channels, -1, *self.kernel_size)
         return kernel
 
 class SE2ConvType1(_SE2Conv):
@@ -148,7 +148,7 @@ class _SE2DeConv(_SE2Conv):
         
         # Convolution
         x = x.reshape(x.shape[0], -1, *x.shape[-2:])
-        x = torch.nn.functional.conv_transpose2d(x, self.kernel.to(x.device).transpose(0,1), stride=self.stride, padding = self.padding, 
+        x = torch.nn.functional.conv_transpose2d(x, self.kernel.transpose(0,1), stride=self.stride, padding = self.padding, 
                                                  dilation=self.dilation, output_padding=self.output_padding)
         x = x.reshape(x.shape[0], self.max_m, self.out_channels, *x.shape[-2:])
 
@@ -202,11 +202,10 @@ class SE2CGNonLinearity(nn.Module):
     def __init__(self, max_m):
         super(SE2CGNonLinearity, self).__init__()
         self.max_m = max_m
-        self.CG_Matrix = get_CG_matrix(max_m)
+        self.register_buffer('CG_Matrix', get_CG_matrix(max_m))
         
     def forward(self, x):
-        CG_Matrix = self.CG_Matrix.to(x.device)
-        x = torch.einsum('lmn, bmoxy, bnoxy -> bloxy', CG_Matrix, x,x)
+        x = torch.einsum('lmn, bmoxy, bnoxy -> bloxy', self.CG_Matrix, x,x)
         return x
 
 
@@ -218,18 +217,15 @@ class SE2NonLinearity(nn.Module):
     '''
     def __init__(self, max_m, nonlinearity = nn.ReLU()):
         super(SE2NonLinearity, self).__init__()
-        self.FT = torch.fft.fft(torch.eye(max_m, max_m)) / sqrt(max_m)
-        self.IFT = torch.fft.ifft(torch.eye(max_m, max_m)) / sqrt(max_m)
+        self.register_buffer('FT', torch.fft.fft(torch.eye(max_m, max_m)) / sqrt(max_m))
+        self.register_buffer('IFT', torch.fft.ifft(torch.eye(max_m, max_m)) / sqrt(max_m))
         self.nonlinearity = nonlinearity
 
     def forward(self, x):
         x_shape = x.shape
-        FT = self.FT.to(x.device)
-        IFT = self.IFT.to(x.device)
-        
-        x = IFT @ x.flatten(2)
+        x = self.IFT @ x.flatten(2)
         x = self.nonlinearity(x.real) + 1j*self.nonlinearity(x.imag)
-        x = (FT @ x).reshape(*x_shape)
+        x = (self.FT @ x).reshape(*x_shape)
         return x
     
 
@@ -255,17 +251,56 @@ class SE2NormNonLinearity(nn.Module):
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-class SE2BatchNorm(nn.Module):
-    def __init__(self):
-        super(SE2BatchNorm, self).__init__()
+# class SE2BatchNorm(nn.Module):
+#     def __init__(self):
+#         super(SE2BatchNorm, self).__init__()
+#         self.eps = 1e-5
+
+#     def forward(self, x):
+#         #factor = x.abs() + self.eps
+#         factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
+#         x = (x.real/factor) + 1j*(x.imag/factor)
+
+#         return x
+
+class SE2BatchNorm(torch.nn.Module):
+    def __init__(self, max_m, num_features,  momentum=0.1):
+        super().__init__()
+        
+        self.max_m = max_m
+        self.num_features = num_features
         self.eps = 1e-5
+        self.momentum = momentum
+
+        # Layer Parameters
+        self.weight = nn.Parameter(torch.ones(max_m, num_features, 1, dtype=torch.cfloat))
+        self.bias   = nn.Parameter(torch.zeros(max_m, num_features, 1, dtype=torch.cfloat))
+
+        # Running mean and variance
+        self.register_buffer('running_mean', torch.zeros(max_m, num_features, dtype=torch.cfloat))
+        self.register_buffer('running_var',  torch.ones(num_features, dtype=torch.cfloat))
 
     def forward(self, x):
-        #factor = x.abs() + self.eps
-        factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
+        x_shape = x.shape
+        x = x.flatten(3)
+        factor = x.abs() + self.eps
         x = (x.real/factor) + 1j*(x.imag/factor)
+        
+        if self.training:
+            mean = x.mean(dim=(0,-1), keepdim=True)
+            var = x.var(dim=(0,-1), unbiased=False, keepdim=True).sum(dim=1, keepdim=True)
+            
+            with torch.no_grad():
+                self.running_mean.mul_(1 - self.momentum).add_(self.momentum * mean.squeeze())
+                self.running_var.mul_(1 - self.momentum).add_(self.momentum * var.squeeze())
+        else:  
+            mean = self.running_mean.reshape(self.max_m, self.num_features, 1,1)
+            var = self.running_var.reshape(1, self.num_features, 1,1)
 
-        return x
+        # Normalize
+        x_hat = (x - mean) / torch.sqrt(var + self.eps)
+        x_hat = (x_hat * self.weight + self.bias).reshape(*x_shape)
+        return x_hat
 
 #######################################################################################################################
 ################################################## Average Pooling Layer ##############################################
@@ -282,7 +317,6 @@ class SE2AvgPool(nn.Module):
         x = x.reshape(*x_shape[:3], *x.shape[2:])
         
         return x
-
 
 #######################################################################################################################
 ################################################### Invariant Layers ##################################################
@@ -327,7 +361,7 @@ class ComplexDropout(nn.Module):
         if not torch.is_complex(x):
             return torch.nn.functional.dropout(x, self.p, training=True, inplace=self.inplace)
 
-        mask = (torch.rand_like(x.real) > self.p).to(x.dtype) / (1 - self.p)
+        mask = (torch.rand_like(x.real) > self.p).type(x.dtype) / (1 - self.p)
         if self.inplace:
             return x.mul_(mask)
         return x * mask

@@ -264,7 +264,7 @@ class SE2NormNonLinearity(nn.Module):
 #         return x
 
 class SE2BatchNorm(torch.nn.Module):
-    def __init__(self, max_m, num_features,  momentum=0.1):
+    def __init__(self, num_features, max_m, momentum=0.1):
         super().__init__()
         
         self.max_m = max_m

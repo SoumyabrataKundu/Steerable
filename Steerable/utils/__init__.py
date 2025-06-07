@@ -5,3 +5,4 @@ from Steerable.utils.Loss import *
 from Steerable.utils.Metrics import *
 from Steerable.utils.Patchify import *
 from Steerable.utils.Segment import *
+from Steerable.utils.rotate import *

@@ -294,8 +294,8 @@ class SE2BatchNorm(torch.nn.Module):
                 self.running_mean.mul_(1 - self.momentum).add_(self.momentum * mean.squeeze())
                 self.running_var.mul_(1 - self.momentum).add_(self.momentum * var.squeeze())
         else:  
-            mean = self.running_mean.reshape(self.max_m, self.num_features, 1,1)
-            var = self.running_var.reshape(1, self.num_features, 1,1)
+            mean = self.running_mean.reshape(self.max_m, self.num_features, 1)
+            var = self.running_var.reshape(1, self.num_features, 1)
 
         # Normalize
         x_hat = (x - mean) / torch.sqrt(var + self.eps)

@@ -4,7 +4,8 @@ from numpy import prod
 try:
     import gelib
 except:
-    raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
+    pass
+    #raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
 
 from Steerable.nn.Steerable3d.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 
@@ -30,7 +31,7 @@ class SE3Conv(nn.Module):
         self.conv_first = conv_first
         
         # Fint Matrix
-        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_theta, n_theta, 
+        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_theta, 
                                      len(self.out_channels)-1, len(self.in_channels)-1, len(self.in_channels)-1,
                                      interpolation_type)
 

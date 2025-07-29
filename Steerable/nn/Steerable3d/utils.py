@@ -50,7 +50,7 @@ def get_CGtensor(l,l1,l2):
 ################################################### Fint Matrix ###########################################################
 ###########################################################################################################################
 
-def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_type=1):
+def get_Fint_matrix(kernel_size, n_radius, n_theta, maxl, interpolation_type=1):
     R1, R2, R3 = (kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2, (kernel_size[2] - 1) / 2
     r1_values = torch.arange(R1 / (n_radius+1), R1, R1 / (n_radius+1))[:n_radius]
     r2_values = torch.arange(R2 / (n_radius+1), R2, R2 / (n_radius+1))[:n_radius]
@@ -79,16 +79,17 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
         
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        I = get_interpolation_matrix(kernel_size, n_radius, n_theta, n_phi, interpolation_type).type(torch.cfloat) # Interpolation Matrix
-        SHT = get_sh_transform_matrix(n_theta, n_phi, maxl) # Spherical Harmonic Transform Matrix
+        I = get_interpolation_matrix(kernel_size, n_radius, n_theta, interpolation_type).type(torch.cfloat) # Interpolation Matrix
+        I = torch.permute(I, (0,1,3,4,2))
+        SHT = get_sh_transform_matrix(n_theta, n_theta, maxl) # Spherical Harmonic Transform Matrix
         Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', r1_values*r2_values, SHT[l], I) for l in range(maxl+1)] # Fint Matrix
     else:
         raise ValueError("'interpolation_type' integer takes values between -1 and 1.")
 
     return Fint
 
-def get_CFint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, maxl1, maxl2, interpolation_type=1):
-    Fint = get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl2, interpolation_type)
+def get_CFint_matrix(kernel_size, n_radius, n_theta, maxl, maxl1, maxl2, interpolation_type=1):
+    Fint = get_Fint_matrix(kernel_size, n_radius, n_theta, maxl2, interpolation_type)
 
     # CG Tensor
     C =[[[(2*l1+1) * (2*l2+1) * get_CGtensor(l, l1, l2)/(2*l+1)

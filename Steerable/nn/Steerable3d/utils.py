@@ -65,7 +65,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
         norm = torch.sqrt(X**2 + Y**2 + Z**2)
         theta = torch.arctan2(Y, X)
         phi = torch.acos(torch.clamp(Z / norm, -1.0, 1.0))
-        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1,1) - norm)**2)/2).type(torch.cfloat)
+        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1,1) - norm)**2)/0.72).type(torch.cfloat)
         
         Fint = []
         for l in range(maxl+1):

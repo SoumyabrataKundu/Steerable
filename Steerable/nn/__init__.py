@@ -1,5 +1,6 @@
 import importlib
 
+from Steerable.nn.utils import *
 from Steerable.nn.Steerable2d.conv_layers import *
 from Steerable.nn.Steerable2d.utils import *
 from Steerable.nn.Steerable2d.transformer_layers import *

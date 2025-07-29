@@ -1,56 +1,7 @@
 import torch
-from math import floor, pi
 from scipy.ndimage.interpolation import rotate
-from scipy.interpolate import RectBivariateSpline
+from Steerable.nn.utils import get_interpolation_matrix
 from math import sqrt
-
-#######################################################################################################################
-################################################# Interpolation Matrix ################################################
-#######################################################################################################################
-
-def get_interpolation_matrix(kernel_size, n_radius, n_theta, k=1):
-    R1 = (kernel_size[0]-1)/2
-    R2 = (kernel_size[1]-1)/2
-    r1_values = torch.arange(R1/(n_radius+1), R1, R1/(n_radius+1))[:n_radius]
-    r2_values = torch.arange(R2/(n_radius+1), R2, R2/(n_radius+1))[:n_radius]
-    phi_values = torch.arange(0, 2 * pi, 2 * pi / n_theta)
-    
-    x1_values = torch.tensordot(r1_values, torch.cos(phi_values), dims=0) + R1
-    x2_values = torch.tensordot(r2_values, torch.sin(phi_values), dims=0) + R2
-    kernel1 = torch.arange(0, kernel_size[0], 1)
-    kernel2 = torch.arange(0, kernel_size[1], 1)
-    
-    I = torch.zeros(n_radius, n_theta, kernel_size[0], kernel_size[1])
-    for r in range(n_radius):
-        for theta in range(n_theta):
-            x1 = x1_values[r,theta]
-            x2 = x2_values[r,theta]
-            for y1 in kernel1:
-                for y2 in kernel2:
-                    if k == 0 or k == 1:
-                        integer_x1, fraction_x1 = floor(x1), x1 - floor(x1)
-                        integer_x2, fraction_x2 = floor(x2), x2 - floor(x2)
-                        
-                        def w(x,y):
-                            return float(x>= 0.5) * float(y>=0.5) if k==0 else x*y
-                        
-                        if (y1,y2) == (integer_x1, integer_x2):
-                            I[r,theta, y1, y2] = w(1-fraction_x1, 1-fraction_x2)
-                        if (y1,y2) == (integer_x1+1, integer_x2):
-                            I[r,theta, y1, y2] = w(fraction_x1, 1-fraction_x2)
-                        if (y1,y2) == (integer_x1, integer_x2+1):
-                            I[r,theta, y1, y2] = w(1 - fraction_x1, fraction_x2)
-                        if (y1,y2) == (integer_x1+1, integer_x2+1):
-                            I[r,theta, y1, y2] = w(fraction_x1, fraction_x2)
-                    
-                    elif k>1:
-                        f = torch.zeros((len(kernel1), len(kernel2)))
-                        f[y1,y2] = 1
-                        spline = RectBivariateSpline(kernel1, kernel2, f, kx=k, ky=k)
-                        I[r,theta, y1, y2] = spline(x1_values[r,theta], x2_values[r,theta])[0, 0]
-    
-    return I.type(torch.cfloat)
-    
 
 #######################################################################################################################
 ################################################# Fint Matrix #########################################################
@@ -69,14 +20,14 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, max_m, interpolation_type=1)
         
         norm = torch.sqrt(X**2 + Y**2).reshape(kernel_size[0], kernel_size[1])
         theta = torch.arctan2(Y, X)
-        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1) - norm)**2)/2).type(torch.cfloat)
+        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1) - norm)**2)/0.72).type(torch.cfloat)
 
         Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(max_m)], dim = 0)
         Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
         # Interpolation
-        I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(interpolation_type, min(kernel_size)-1))
+        I = get_interpolation_matrix(kernel_size, n_radius, n_theta, min(interpolation_type, min(kernel_size)-1)).type(torch.cfloat)
         # Fourier Transform Matrix
         FT = (torch.fft.fft(torch.eye(max_m, n_theta)) / sqrt(n_theta))
         Fint = torch.einsum('r, mt, rtxy -> mrxy', torch.sqrt(r1_values*r2_values), FT, I)

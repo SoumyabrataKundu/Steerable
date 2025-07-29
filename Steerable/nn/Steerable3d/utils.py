@@ -1,54 +1,11 @@
 import torch
 import pyshtools
-from math import pi, floor
+from Steerable.nn.utils import get_interpolation_matrix
 from sympy.physics.quantum.cg import CG
 from scipy.ndimage.interpolation import rotate
 from scipy.special import sph_harm
 
-#######################################################################################################################
-############################################ Interpolation Matrix #####################################################
-#######################################################################################################################
 
-def get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi, interpolation_type=1):
-    R1, R2, R3 = (kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2, (kernel_size[2] - 1) / 2
-    r1_values = torch.arange(R1 / (n_radius+1), R1, R1 / (n_radius+1))[:n_radius]
-    r2_values = torch.arange(R2 / (n_radius+1), R2, R2 / (n_radius+1))[:n_radius]
-    r3_values = torch.arange(R3 / (n_radius+1), R3, R3 / (n_radius+1))[:n_radius]
-    
-    theta_values = torch.arange(0, pi, pi / n_theta)
-    phi_values = torch.arange(0, 2 * pi, 2 * pi / n_phi)
-
-    def w(x,y,z):
-        if interpolation_type == 0:
-            return float(x>=0.5)*float(y>=0.5)*float(z>=0.5)
-        elif interpolation_type == 1:
-            return x*y*z
-        # return x**2*y**2*z**2*(9 - 6*x - 6*y - 6*z + 4*x*y*z)
-
-    I = torch.zeros(n_radius, n_theta, n_phi, kernel_size[0], kernel_size[1], kernel_size[2], dtype=torch.cfloat)
-    x_new = torch.tensordot(torch.tensordot(r1_values, torch.sin(theta_values), dims=0), torch.cos(phi_values), dims = 0) + R1
-    y_new = torch.tensordot(torch.tensordot(r2_values, torch.sin(theta_values), dims=0), torch.sin(phi_values), dims = 0) + R2
-    z_new = torch.tensordot(r3_values, torch.cos(theta_values), dims=0).unsqueeze(2).repeat(1, 1, n_phi) + R3
-
-    for r in range(n_radius):
-        for theta in range(n_theta):
-            for phi in range(n_phi):
-                integer_x, fraction_x = floor(x_new[r, theta, phi]), x_new[r, theta, phi] - floor(x_new[r, theta, phi])
-                integer_y, fraction_y = floor(y_new[r, theta, phi]), y_new[r, theta, phi] - floor(y_new[r, theta, phi])
-                integer_z, fraction_z = floor(z_new[r, theta, phi]), z_new[r, theta, phi] - floor(z_new[r, theta, phi])
-
-                I[r, theta, phi, integer_x, integer_y, integer_z] = w((1-fraction_x), (1-fraction_y), (1-fraction_z))
-                I[r, theta, phi, integer_x + 1, integer_y, integer_z] = w(fraction_x, (1-fraction_y), (1-fraction_z))
-                I[r, theta, phi, integer_x, integer_y + 1, integer_z] = w((1 - fraction_x), fraction_y, (1-fraction_z))
-                I[r, theta, phi, integer_x + 1, integer_y + 1, integer_z] = w(fraction_x, fraction_y, (1-fraction_z))
-
-                I[r, theta, phi, integer_x, integer_y, integer_z + 1] = w((1-fraction_x), (1-fraction_y), fraction_z)
-                I[r, theta, phi, integer_x + 1, integer_y, integer_z + 1] = w(fraction_x, (1-fraction_y), fraction_z)
-                I[r, theta, phi, integer_x, integer_y + 1, integer_z + 1] = w((1 - fraction_x), fraction_y, fraction_z)
-                I[r, theta, phi, integer_x + 1, integer_y + 1, integer_z + 1] = w(fraction_x, fraction_y, fraction_z)
-
-    I = I.flatten(1,2) # n_radius x n_theta * n_phi x *kernel
-    return I
 
 ######################################################################################################################
 ######################################### Spherical Harmonic Transform ###############################################
@@ -93,7 +50,7 @@ def get_CGtensor(l,l1,l2):
 ################################################### Fint Matrix ###########################################################
 ###########################################################################################################################
 
-def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_type=1):
+def get_Fint_matrix(kernel_size, n_radius, n_theta, maxl, interpolation_type=1):
     R1, R2, R3 = (kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2, (kernel_size[2] - 1) / 2
     r1_values = torch.arange(R1 / (n_radius+1), R1, R1 / (n_radius+1))[:n_radius]
     r2_values = torch.arange(R2 / (n_radius+1), R2, R2 / (n_radius+1))[:n_radius]
@@ -108,7 +65,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
         norm = torch.sqrt(X**2 + Y**2 + Z**2)
         theta = torch.arctan2(Y, X)
         phi = torch.acos(torch.clamp(Z / norm, -1.0, 1.0))
-        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1,1) - norm)**2)/2).type(torch.cfloat)
+        tau_r = torch.exp(-(( (torch.arange(n_radius)+1).reshape(-1,1,1,1) - norm)**2)/0.72).type(torch.cfloat)
         
         Fint = []
         for l in range(maxl+1):
@@ -122,16 +79,17 @@ def get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, interpolation_t
         
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        I = get_interpolation_matrix_3D(kernel_size, n_radius, n_theta, n_phi, interpolation_type) # Interpolation Matrix
-        SHT = get_sh_transform_matrix(n_theta, n_phi, maxl) # Spherical Harmonic Transform Matrix
+        I = get_interpolation_matrix(kernel_size, n_radius, n_theta, interpolation_type).type(torch.cfloat) # Interpolation Matrix
+        I = torch.permute(I, (0,1,3,4,2))
+        SHT = get_sh_transform_matrix(n_theta, n_theta, maxl) # Spherical Harmonic Transform Matrix
         Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', r1_values*r2_values, SHT[l], I) for l in range(maxl+1)] # Fint Matrix
     else:
         raise ValueError("'interpolation_type' integer takes values between -1 and 1.")
 
     return Fint
 
-def get_CFint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl, maxl1, maxl2, interpolation_type=1):
-    Fint = get_Fint_matrix(kernel_size, n_radius, n_theta, n_phi, maxl2, interpolation_type)
+def get_CFint_matrix(kernel_size, n_radius, n_theta, maxl, maxl1, maxl2, interpolation_type=1):
+    Fint = get_Fint_matrix(kernel_size, n_radius, n_theta, maxl2, interpolation_type)
 
     # CG Tensor
     C =[[[(2*l1+1) * (2*l2+1) * get_CGtensor(l, l1, l2)/(2*l+1)

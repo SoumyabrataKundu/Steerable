@@ -142,6 +142,7 @@ class SE2CGNonLinearity(torch.nn.Module):
         super(SE2CGNonLinearity, self).__init__()
         self.freq_cutoff = freq_cutoff
         self.CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=freq_cutoff), dtype=torch.cfloat)
+        self.weight = torch.nn.Parameter(torch.randn(freq_cutoff, freq_cutoff, dtype=torch.cfloat))
         
     def forward(self, x):
         CG_Matrix = self.CG_Matrix.to(x.device)

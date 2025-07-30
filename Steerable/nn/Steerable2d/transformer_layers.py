@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from math import sqrt
 
-from Steerable.nn.Steerable2d.utils import get_pos_encod
+from Steerable.nn.utils import get_pos_encod
 from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNorm, ComplexDropout
         
 #######################################################################################################################

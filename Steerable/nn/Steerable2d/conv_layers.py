@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from numpy import sqrt, prod
-from Steerable.nn.Steerable2d.utils import get_Fint_matrix, get_CG_matrix
+from Steerable.nn.utils import get_Fint_matrix, get_CFint_matrix, get_CG_matrix
 
 #######################################################################################################################
 ################################################ Convolution Layers ###################################################
@@ -11,7 +11,7 @@ class _SE2Conv(nn.Module):
     '''
     SE(2) Convolution Base Class.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
                  interpolation_type=1,dilation=1, padding=0, stride=1, conv_first=False):
         super(_SE2Conv, self).__init__()
 
@@ -25,16 +25,14 @@ class _SE2Conv(nn.Module):
         self.out_channels = out_channels
         self.max_m = max_m
         self.n_radius = n_radius
-        self.n_theta = n_theta
+        self.n_angle = n_angle
         self.conv_first = conv_first
         self.groups = 1
 
         # Layer Parameters
         self.weights = None
         self.kernel = None
-
-        # Fint Matrix
-        self.Fint = get_Fint_matrix(self.kernel_size, n_radius, n_theta, self.max_m, interpolation_type)
+        self.Fint = None
         
 
     def forward(self, x):
@@ -75,12 +73,15 @@ class SE2ConvType1(_SE2Conv):
     '''
     SE(2) Convolution in first Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
                  interpolation_type=1, dilation=1, padding=0, stride=1, conv_first=False):
         super(SE2ConvType1, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, conv_first=conv_first)
+        
+        # Fint Matrix
+        self.Fint = get_Fint_matrix(self.kernel_size, n_radius, n_angle, self.max_m, interpolation_type)
 
         # Layer Parameters
         if self.conv_first:
@@ -96,15 +97,14 @@ class SE2ConvType2(_SE2Conv):
     '''
     SE(2) Convolution in higher Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
                  interpolation_type=1,  dilation=1, padding=0, stride=1, restricted=False, conv_first=False) -> None:
         super(SE2ConvType2, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, conv_first=conv_first)
         # CFint Matrix
-        CG_Matrix = get_CG_matrix(max_m=max_m)
-        self.Fint = torch.einsum('lmn, nrxy -> lmrxy', CG_Matrix, self.Fint)
+        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_angle, self.max_m, interpolation_type)
         
         if conv_first:
             self.Fint = self.Fint.transpose(1,2).flatten(0,1)
@@ -131,10 +131,10 @@ class _SE2DeConv(_SE2Conv):
     '''
     SE(2) DeConvolution Base Class.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
                  interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0) -> None:
         super(_SE2DeConv, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride)
 
@@ -158,17 +158,17 @@ class SE2DeConvType1(_SE2DeConv, SE2ConvType1):
     '''
     SE(2) Convolution in first Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
                  interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0,
                  restricted=False) -> None:
         
         _SE2DeConv.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, output_padding=output_padding)
         
         SE2ConvType1.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, restricted=restricted)
 
@@ -177,17 +177,17 @@ class SE2DeConvType2(_SE2DeConv, SE2ConvType2):
     '''
     SE(2) Convolution in higher Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, max_m, 
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
                  interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0,
                  restricted=False) -> None:
         
         _SE2DeConv.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, output_padding=output_padding)
         
         SE2ConvType2.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_theta=n_theta, max_m=max_m, 
+                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
                                            interpolation_type=interpolation_type,
                                            dilation=dilation, padding=padding, stride=stride, restricted=restricted)
         
@@ -202,7 +202,7 @@ class SE2CGNonLinearity(nn.Module):
     def __init__(self, max_m):
         super(SE2CGNonLinearity, self).__init__()
         self.max_m = max_m
-        self.CG_Matrix = get_CG_matrix(max_m)
+        self.CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=max_m), dtype=torch.cfloat)
         
     def forward(self, x):
         CG_Matrix = self.CG_Matrix.to(x.device)

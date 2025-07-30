@@ -7,14 +7,15 @@ except:
     pass
     #raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
 
-from Steerable.nn.Steerable3d.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
+from Steerable.nn.utils import get_CFint_matrix
+from Steerable.nn.utils import merge_channel_dim, split_channel_dim
 
 ##################################################################################################################################
 ########################################################### First Layer ##########################################################
 ##################################################################################################################################
 
 class SE3Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta, interpolation_type=1,
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, interpolation_type=1,
                  dilation=1, padding=0, stride=1, restricted=False, conv_first=False):
         super(SE3Conv, self).__init__()
         
@@ -25,15 +26,13 @@ class SE3Conv(nn.Module):
         self.stride = (stride, stride, stride) if type(stride) is not tuple else stride
 
         self.n_radius = n_radius
-        self.n_theta = n_theta
+        self.n_angle = n_angle
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.out_channels = [out_channels] if type(out_channels) is not list and type(out_channels) is not tuple else out_channels
         self.conv_first = conv_first
         
         # Fint Matrix
-        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_theta, 
-                                     len(self.out_channels)-1, len(self.in_channels)-1, len(self.in_channels)-1,
-                                     interpolation_type)
+        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_angle, max(len(self.out_channels), len(self.in_channels))-1, interpolation_type)
 
         if conv_first:
             if restricted:
@@ -46,7 +45,7 @@ class SE3Conv(nn.Module):
             else:
                 # Layer Parameters
                 self.weights = nn.ParameterList([nn.Parameter(
-                                            torch.randn(self.out_channels[l], sum(self.in_channels) * len(self.in_channels) * n_radius, dtype = torch.cfloat))
+                                            torch.randn(self.out_channels[l], sum(self.in_channels) * (max(len(self.out_channels), len(self.in_channels))-1) * n_radius, dtype = torch.cfloat))
                                             for l in range(len(self.out_channels))])
                 self.Fint = [torch.cat(t, dim=0).flatten(0,2) for t in self.Fint]
                 
@@ -58,7 +57,7 @@ class SE3Conv(nn.Module):
                 self.Fint = [[t2.flatten(-3).sum(dim=2).transpose(1,2).unsqueeze(1) for t2 in t1] for t1 in self.Fint]
             else:
                 self.weights = nn.ParameterList([nn.Parameter(
-                                            torch.randn(self.out_channels[l], 1, self.in_channels[l1], len(self.in_channels)*n_radius, dtype = torch.cfloat))
+                                            torch.randn(self.out_channels[l], 1, self.in_channels[l1], max(len(self.out_channels), len(self.in_channels))*n_radius, dtype = torch.cfloat))
                                             for l in range(len(self.out_channels)) for l1 in range(len(self.in_channels))])
                 self.Fint = [[t2.flatten(-3).flatten(1,2).transpose(1,2).unsqueeze(1) for t2 in t1] for t1 in self.Fint]
 
@@ -105,6 +104,7 @@ class SE3Conv(nn.Module):
         kernel = torch.cat(kernel, dim=0)
         
         return kernel
+
 
 ########################################################################################################################
 #################################################### Non-linearity #####################################################
@@ -153,11 +153,11 @@ class SE3NormNonLinearity(nn.Module):
         return result
 
 class SE3GatedNonLinearity(nn.Module):
-    def __init__(self, in_channels, kernel_size, n_radius, n_theta):
+    def __init__(self, in_channels, kernel_size, n_radius, n_angle):
         super(SE3GatedNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.Sigmoid()
-        self.layer = SE3Conv(in_channels, sum(in_channels), kernel_size, n_radius, n_theta, padding='same')
+        self.layer = SE3Conv(in_channels, sum(in_channels), kernel_size, n_radius, n_angle, padding='same')
         self.in_channels = self.layer.in_channels
         
     def forward(self, x):

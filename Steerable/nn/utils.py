@@ -1,9 +1,9 @@
 from math import sqrt
 import pyshtools
 from scipy.ndimage import map_coordinates
+from scipy.ndimage.interpolation import rotate
 from scipy.special import sph_harm
 from sympy.physics.quantum.cg import CG
-from scipy.ndimage.interpolation import rotate
 
 import torch
 
@@ -40,7 +40,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
 ###########################################################################################################################
 
 
-def get_FT_matrix(n_angle, freq_cutoff, dimension=2):
+def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     '''
     Spherical Harmonic Transform Basis
     '''
@@ -51,7 +51,6 @@ def get_FT_matrix(n_angle, freq_cutoff, dimension=2):
         f = torch.zeros(n_angle, n_angle)
         FT = [torch.zeros(2*l + 1, n_angle * n_angle, dtype=torch.cfloat) for l in range(freq_cutoff + 1)]
         index = 0
-
         for theta in range(n_angle):
             for phi in range(n_angle):
                 torch.zero_(f)
@@ -128,7 +127,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         R = [(kernel_size[d] - 1) / 2 for d in range(len(kernel_size))]
         r = torch.vstack([torch.arange(R[i] / (n_radius+1), R[i], R[i] / (n_radius+1))[:n_radius] for i in range(len(kernel_size))])
         tau_r = torch.prod(r, dim=0)**((len(kernel_size)-1)/len(kernel_size))
-        FT = get_FT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
+        FT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
             Fint = torch.einsum('r, mt, rtxy -> mrxy', tau_r, FT, I)
@@ -226,7 +225,6 @@ def rotate_image(image, degree=None, order=5, batched=False):
 #########################################################################################################################
 ####################################### Merge and Split Channels (3D) ###################################################
 #########################################################################################################################
-
 
 def merge_channel_dim(x, channel_last=False):
     if not channel_last:

@@ -1,5 +1,4 @@
 import torch 
-import torch.nn as nn
 from math import sqrt
 
 from Steerable.nn.utils import get_pos_encod
@@ -9,7 +8,7 @@ from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNo
 ############################################## Multihead Self Attention ###############################################
 #######################################################################################################################
 
-class SE2MultiSelfAttention(nn.Module):
+class SE2MultiSelfAttention(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, max_m, dropout = 0.1, add_pos_enc = True):
         super(SE2MultiSelfAttention, self).__init__()
 
@@ -23,9 +22,9 @@ class SE2MultiSelfAttention(nn.Module):
         self.dropout = ComplexDropout(p = dropout)
 
         # Layer Parameters
-        self.embeddings = nn.Parameter(torch.randn(3, 1, max_m, n_head, self.query_dim, transformer_dim, dtype = torch.cfloat))
-        self.encoding = nn.Parameter(torch.randn(2, self.max_m, n_head, 1, self.query_dim, 1, dtype = torch.cfloat))
-        self.out = nn.Parameter(torch.randn(max_m, transformer_dim, n_head * self.query_dim, dtype = torch.cfloat))
+        self.embeddings = torch.nn.Parameter(torch.randn(3, 1, max_m, n_head, self.query_dim, transformer_dim, dtype = torch.cfloat))
+        self.encoding = torch.nn.Parameter(torch.randn(2, self.max_m, n_head, 1, self.query_dim, 1, dtype = torch.cfloat))
+        self.out = torch.nn.Parameter(torch.randn(max_m, transformer_dim, n_head * self.query_dim, dtype = torch.cfloat))
 
         self.pos_enc = None
 
@@ -50,7 +49,7 @@ class SE2MultiSelfAttention(nn.Module):
         
         # Attention Weights
         A = torch.sum(A, dim=1, keepdim=True)
-        A = nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1).type(torch.cfloat)
+        A = torch.nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1).type(torch.cfloat)
         A = self.dropout(A)
  
         # Output
@@ -68,19 +67,19 @@ class SE2MultiSelfAttention(nn.Module):
 ############################################## Positionwise Feedforward ###############################################
 #######################################################################################################################    
 
-class SE2PositionwiseFeedforward(nn.Module):
+class SE2PositionwiseFeedforward(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, max_m, dropout = 0.1):
         super(SE2PositionwiseFeedforward, self).__init__()
 
         self.max_m = max_m
 
-        self.weights1 = nn.Parameter(torch.randn(max_m, hidden_dim, input_dim, dtype = torch.cfloat))
-        self.weights2 = nn.Parameter(torch.randn(max_m, input_dim, hidden_dim, dtype = torch.cfloat))
+        self.weights1 = torch.nn.Parameter(torch.randn(max_m, hidden_dim, input_dim, dtype = torch.cfloat))
+        self.weights2 = torch.nn.Parameter(torch.randn(max_m, input_dim, hidden_dim, dtype = torch.cfloat))
         self.dropout1 = ComplexDropout(p = dropout)
         self.dropout2 = ComplexDropout(p = dropout)
         
         self.eps = 1e-5
-        self.nonlinearity = SE2NormNonLinearity(hidden_dim, max_m, nonlinearity=nn.GELU())
+        self.nonlinearity = SE2NormNonLinearity(hidden_dim, max_m, nonlinearity=torch.nn.GELU())
 
     def forward(self, x):
         x_shape = x.shape
@@ -99,7 +98,7 @@ class SE2PositionwiseFeedforward(nn.Module):
 ################################################# SE(2) Transformer ###################################################
 ####################################################################################################################### 
 
-class SE2Transformer(nn.Module):
+class SE2Transformer(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, hidden_dim, max_m, dropout = 0.1, add_pos_enc = True):
         super(SE2Transformer, self).__init__()
 
@@ -120,7 +119,7 @@ class SE2Transformer(nn.Module):
 ############################################## SE(2) Transformer Encoder ##############################################
 ####################################################################################################################### 
 
-class SE2TransformerEncoder(nn.Module):
+class SE2TransformerEncoder(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, max_m, n_layers = 1, dropout = 0.1, add_pos_enc = True):
         super(SE2TransformerEncoder, self).__init__()
 
@@ -138,7 +137,7 @@ class SE2TransformerEncoder(nn.Module):
 ############################################## SE(2) Transformer Decoder ##############################################
 ####################################################################################################################### 
 
-class SE2TransformerDecoder(nn.Module):
+class SE2TransformerDecoder(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, max_m, n_classes, n_layers, dropout = 0.1, add_pos_enc = True):
         super(SE2TransformerDecoder, self).__init__()
 
@@ -151,7 +150,7 @@ class SE2TransformerDecoder(nn.Module):
             *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, max_m, dropout, add_pos_enc) for _ in range(n_layers)]
         )
 
-        self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
+        self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
         self.C = torch.tensor([[[(m1+m2-m)%max_m == 0 for m2 in range(max_m)]
                            for m1 in range(max_m)] for m in range(max_m)]).type(torch.cfloat)
 
@@ -178,10 +177,10 @@ class SE2TransformerDecoder(nn.Module):
         
         return patches, cls_seg_feat
 
-class SE2ClassEmbeddings(nn.Module):
+class SE2ClassEmbeddings(torch.nn.Module):
     def __init__(self, transformer_dim, embedding_dim, max_m):
         super(SE2ClassEmbeddings, self).__init__()
-        self.weight = nn.Parameter(torch.randn(max_m, embedding_dim, transformer_dim, dtype=torch.cfloat))
+        self.weight = torch.nn.Parameter(torch.randn(max_m, embedding_dim, transformer_dim, dtype=torch.cfloat))
         self.norm = SE2BatchNorm()
 
     def forward(self, x, classes):

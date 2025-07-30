@@ -1,6 +1,5 @@
 import torch
-import torch.nn as nn
-from numpy import prod, sqrt
+from math import sqrt
 from Steerable.nn.Steerable3d.Steerable3d_pytorch.conv_layers import SE3BatchNorm, SE3NormNonLinearity
 from Steerable.nn.utils import merge_channel_dim, get_pos_encod, split_channel_dim
 
@@ -8,7 +7,7 @@ from Steerable.nn.utils import merge_channel_dim, get_pos_encod, split_channel_d
 ############################################ SE(3) Multihead Self Attention ###########################################
 #######################################################################################################################
 
-class SE3MultiSelfAttention(nn.Module):
+class SE3MultiSelfAttention(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, add_pos_enc=True):
         super(SE3MultiSelfAttention, self).__init__()
 
@@ -24,13 +23,13 @@ class SE3MultiSelfAttention(nn.Module):
             self.query_dim.append(dim // n_head)
 
         # Layer Parameters
-        self.embeddings = nn.ParameterList([nn.Parameter(
+        self.embeddings = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(3, 1, 1, dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
-        self.encoding = nn.ParameterList([nn.Parameter(
+        self.encoding = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(2, n_head, 1, 1, dim, 1, dtype = torch.cfloat))
                                         for dim in self.query_dim])
-        self.out = nn.ParameterList([nn.Parameter(
+        self.out = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
         self.pos_encod = None
@@ -57,7 +56,7 @@ class SE3MultiSelfAttention(nn.Module):
         if self.add_pos_enc:
             pos = torch.cat(P, dim=-2)
             A = A + (Q.unsqueeze(-2) @ pos[0]).squeeze(-2) / self.scale
-        A = nn.functional.softmax(A.abs(), dim=-1).type(torch.cfloat)
+        A = torch.nn.functional.softmax(A.abs(), dim=-1).type(torch.cfloat)
         
         V = V @ A.transpose(-2,-1)
         if self.add_pos_enc:
@@ -74,7 +73,7 @@ class SE3MultiSelfAttention(nn.Module):
 ################################################### SE(3) Transformer #################################################
 #######################################################################################################################
 
-class SE3PositionwiseFeedforward(nn.Module):
+class SE3PositionwiseFeedforward(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super(SE3PositionwiseFeedforward, self).__init__()
 
@@ -83,12 +82,12 @@ class SE3PositionwiseFeedforward(nn.Module):
         
         assert len(self.hidden_dim) == len(self.input_dim)
         
-        self.weights1 = nn.ParameterList([nn.Parameter(
+        self.weights1 = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(hidden, input, dtype = torch.cfloat))
                                          for input, hidden in zip(self.input_dim, self.hidden_dim)])
         self.nonlinearity = SE3NormNonLinearity(hidden_dim)
 
-        self.weights2 = nn.ParameterList([nn.Parameter(
+        self.weights2 = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(input, hidden, dtype = torch.cfloat))
                                          for input, hidden in zip(self.input_dim, self.hidden_dim)])
 
@@ -104,7 +103,7 @@ class SE3PositionwiseFeedforward(nn.Module):
 ################################################### SE(3) Transformer #################################################
 #######################################################################################################################
 
-class SE3Transformer(nn.Module):
+class SE3Transformer(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, hidden_dim, add_pos_enc=True):
         super(SE3Transformer, self).__init__()
 
@@ -123,7 +122,7 @@ class SE3Transformer(nn.Module):
 
         return x
 
-class SE3TransformerEncoder(nn.Module):
+class SE3TransformerEncoder(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, n_layers = 1, add_pos_enc=True):
         super(SE3TransformerEncoder, self).__init__()
 
@@ -141,7 +140,7 @@ class SE3TransformerEncoder(nn.Module):
 ############################################## SE(3) Transformer Decoder ##############################################
 ####################################################################################################################### 
 
-class SE3TransformerDecoder(nn.Module):
+class SE3TransformerDecoder(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, n_classes, n_layers, add_pos_enc=True):
         super(SE3TransformerDecoder, self).__init__()
 
@@ -152,7 +151,7 @@ class SE3TransformerDecoder(nn.Module):
             [SE3Transformer(transformer_dim, n_head, transformer_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
         )
 
-        self.class_embed = nn.Parameter(torch.randn(1, 1, transformer_dim[0], n_classes, dtype=torch.cfloat))
+        self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim[0], n_classes, dtype=torch.cfloat))
         self.pos_encod = None
         self.norm = SE3BatchNorm()
         
@@ -189,7 +188,7 @@ class SE3TransformerDecoder(nn.Module):
   
         return patches, cls_seg_feat
 
-class SE3ClassEmbedings(nn.Module):
+class SE3ClassEmbedings(torch.nn.Module):
     def __init__(self, transformer_dim, embedding_dim):
         super(SE3ClassEmbedings, self).__init__()
         
@@ -198,8 +197,8 @@ class SE3ClassEmbedings(nn.Module):
         
         assert len(self.transformer_dim) == len(self.embedding_dim)
         
-        self.weight = nn.ParameterList([
-            nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(self.embedding_dim, self.transformer_dim)
+        self.weight = torch.nn.ParameterList([
+            torch.nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(self.embedding_dim, self.transformer_dim)
         ])
         
         

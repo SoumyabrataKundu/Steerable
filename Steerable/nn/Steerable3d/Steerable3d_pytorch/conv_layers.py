@@ -1,11 +1,10 @@
 import torch
-
+gelib_installed = True
 try:
     import gelib
 except:
-    pass
-    #raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
-
+    gelib_installed = False
+    
 from Steerable.nn.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 
 ##################################################################################################################################
@@ -34,8 +33,6 @@ class SE3Conv(torch.nn.Module):
         self.weights = torch.nn.ParameterList([torch.nn.Parameter(
                                     torch.randn(self.out_channels[l], 1, self.in_channels[l1], max(len(self.out_channels), len(self.in_channels))*n_radius, dtype = torch.cfloat))
                                     for l in range(len(self.out_channels)) for l1 in range(len(self.in_channels))])
-        
-
         
     def forward(self, x):
         kernel = self.get_kernel()
@@ -67,6 +64,9 @@ class SE3Conv(torch.nn.Module):
 class SE3CGNonLinearity(torch.nn.Module):
     def __init__(self, in_channels):
         super(SE3CGNonLinearity, self).__init__()
+        
+        if not gelib_installed:
+            raise ImportError("GElib is not installed. SE3CGNonLinearity only works with GElib backend.")
 
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.maxl = len(in_channels) - 1

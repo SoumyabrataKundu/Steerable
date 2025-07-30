@@ -1,33 +1,28 @@
 import torch
-import torch.nn as nn
-from numpy import sqrt, prod
+from math import sqrt, ceil
 from Steerable.nn.utils import get_Fint_matrix, get_CFint_matrix, get_CG_matrix
 
 #######################################################################################################################
 ################################################ Convolution Layers ###################################################
 #######################################################################################################################
 
-class _SE2Conv(nn.Module):
+class _SE2Conv(torch.nn.Module):
     '''
     SE(2) Convolution Base Class.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
-                 interpolation_type=1,dilation=1, padding=0, stride=1, conv_first=False):
+    def __init__(self, in_channels, out_channels, kernel_size, freq_cutoff, n_radius=None, n_angle=None, dilation=1, padding=0, stride=1):
         super(_SE2Conv, self).__init__()
 
         # Layer Design
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.kernel_size = kernel_size if type(kernel_size) is tuple else (kernel_size, kernel_size)
+        self.freq_cutoff = freq_cutoff
+        self.n_radius = n_radius if n_radius else ceil(max(self.kernel_size) / 2)
+        self.n_angle = n_angle if n_angle else freq_cutoff
         self.dilation = dilation if type(dilation) is tuple else (dilation, dilation)
         self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding)
         self.stride = stride if type(stride) is tuple else(stride, stride)
-        
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.max_m = max_m
-        self.n_radius = n_radius
-        self.n_angle = n_angle
-        self.conv_first = conv_first
-        self.groups = 1
 
         # Layer Parameters
         self.weights = None
@@ -39,87 +34,46 @@ class _SE2Conv(nn.Module):
         if x.shape[-3] != self.in_channels:
             raise ValueError(f"Number of channels in the input ({x.shape[2]}) must match in_channels ({self.in_channels}).")    
         
-       
-        if self.conv_first:
-            # Convolution
-            batch_size = x.shape[0]
-            x = x.reshape(batch_size, -1, self.in_channels, *x.shape[-2:]).transpose(1,2).flatten(0,1)
-            x = torch.conv2d(x, self.Fint.to(x.device), stride=self.stride, padding = self.padding, dilation=self.dilation, groups=self.groups)
-            out_res = x.shape[-2:]
-            x = x.reshape(batch_size, -1, self.max_m, self.n_radius, prod(out_res)).transpose(1,2).flatten(2,3)
-            
-            # Weight Multiplication
-            x = self.weights @ x
-            x = x.reshape(batch_size, self.max_m, self.out_channels, *out_res)
-            
-        else:
-            # Steerable Kernel
-            self.kernel = self.get_kernel()
-            
-            # Convolution
-            x = x.reshape(x.shape[0], -1, *x.shape[-2:])
-            x = torch.conv2d(x, self.kernel.to(x.device), stride=self.stride, padding = self.padding, dilation=self.dilation)
-            x = x.reshape(x.shape[0], self.max_m, self.out_channels, *x.shape[-2:])
-            
+        # Steerable Kernel
+        self.kernel = self.get_kernel()
+        
+        # Convolution
+        x = x.reshape(x.shape[0], -1, *x.shape[-2:])
+        x = torch.conv2d(x, self.kernel.to(x.device), stride=self.stride, padding = self.padding, dilation=self.dilation)
+        x = x.reshape(x.shape[0], self.freq_cutoff, self.out_channels, *x.shape[-2:])
 
         return x
     
     def get_kernel(self):
         # Kernel Preparation
-        kernel = (self.weights @ self.Fint.to(self.weights.device)).reshape(self.max_m * self.out_channels, -1, *self.kernel_size)
+        kernel = (self.weights @ self.Fint.to(self.weights.device)).reshape(self.freq_cutoff * self.out_channels, -1, *self.kernel_size)
         return kernel
 
 class SE2ConvType1(_SE2Conv):
     '''
     SE(2) Convolution in first Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
-                 interpolation_type=1, dilation=1, padding=0, stride=1, conv_first=False):
-        super(SE2ConvType1, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride, conv_first=conv_first)
+    def __init__(self, in_channels, out_channels, kernel_size, freq_cutoff, n_radius=None, n_angle=None, dilation=1, padding=0, stride=1, interpolation_type=1):
+        super(SE2ConvType1, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff,
+                                           n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride)
         
         # Fint Matrix
-        self.Fint = get_Fint_matrix(self.kernel_size, n_radius, n_angle, self.max_m, interpolation_type)
-
-        # Layer Parameters
-        if self.conv_first:
-            self.weights = nn.Parameter(torch.randn(max_m, out_channels, in_channels * n_radius, dtype=torch.cfloat))
-            self.Fint = self.Fint.reshape(self.max_m*n_radius, 1, *self.kernel_size)
-        else:
-            self.weights = nn.Parameter(torch.randn(max_m, out_channels * in_channels, n_radius, dtype=torch.cfloat))
-            self.Fint = self.Fint.reshape(self.max_m, n_radius, -1)
-        
+        self.Fint = get_Fint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
+        self.Fint = self.Fint.reshape(self.freq_cutoff, self.n_radius, -1)
+        self.weights = torch.nn.Parameter(torch.randn(self.freq_cutoff, self.out_channels * self.in_channels, self.n_radius, dtype=torch.cfloat))
 
     
 class SE2ConvType2(_SE2Conv):
     '''
     SE(2) Convolution in higher Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
-                 interpolation_type=1,  dilation=1, padding=0, stride=1, restricted=False, conv_first=False) -> None:
-        super(SE2ConvType2, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride, conv_first=conv_first)
+    def __init__(self, in_channels, out_channels, kernel_size, freq_cutoff, n_radius=None, n_angle=None, dilation=1, padding=0, stride=1, interpolation_type=1) -> None:
+        super(SE2ConvType2, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff,
+                                           n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride)
         # CFint Matrix
-        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_angle, self.max_m, interpolation_type)
-        
-        if conv_first:
-            self.Fint = self.Fint.transpose(1,2).flatten(0,1)
-            if restricted:
-                self.weights = nn.Parameter(torch.randn(max_m, out_channels, in_channels * n_radius, dtype=torch.cfloat))
-            else:
-                self.weights = nn.Parameter(torch.randn(max_m, out_channels, max_m * in_channels * n_radius, dtype=torch.cfloat))
-                self.Fint = self.Fint.transpose(0,1).flatten(0,1).unsqueeze(1)
-                self.groups = self.max_m
-        else:
-            self.Fint = self.Fint.reshape(max_m, 1, max_m, n_radius, -1)
-            if restricted:
-                self.weights = nn.Parameter(torch.randn(max_m, out_channels, 1, in_channels, n_radius, dtype=torch.cfloat))
-            else:
-                self.weights = nn.Parameter(torch.randn(max_m, out_channels, max_m, in_channels, n_radius, dtype=torch.cfloat))
+        self.Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
+        self.Fint = self.Fint.reshape(self.freq_cutoff, 1, self.freq_cutoff, self.n_radius, -1)
+        self.weights = torch.nn.Parameter(torch.randn(self.freq_cutoff, self.out_channels, self.freq_cutoff, self.in_channels, self.n_radius, dtype=torch.cfloat))
         
         
         
@@ -131,17 +85,13 @@ class _SE2DeConv(_SE2Conv):
     '''
     SE(2) DeConvolution Base Class.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
-                 interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0) -> None:
-        super(_SE2DeConv, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride)
-
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, freq_cutoff, 
+                 dilation=1, padding=0, stride=1, output_padding=0) -> None:
+        super(_SE2DeConv, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff, 
+                                           n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride)
         # Layer Design
         self.output_padding = stride if type(output_padding) is tuple else(output_padding, output_padding)
         
-
     def forward(self, x):
         if x.shape[-3] != self.in_channels:
             raise ValueError(f"Number of channels in the input ({x.shape[2]}) must match in_channels ({self.in_channels}).")    
@@ -150,7 +100,7 @@ class _SE2DeConv(_SE2Conv):
         x = x.reshape(x.shape[0], -1, *x.shape[-2:])
         x = torch.nn.functional.conv_transpose2d(x, self.kernel.to(x.device).transpose(0,1), stride=self.stride, padding = self.padding, 
                                                  dilation=self.dilation, output_padding=self.output_padding)
-        x = x.reshape(x.shape[0], self.max_m, self.out_channels, *x.shape[-2:])
+        x = x.reshape(x.shape[0], self.freq_cutoff, self.out_channels, *x.shape[-2:])
 
         return x
 
@@ -158,51 +108,40 @@ class SE2DeConvType1(_SE2DeConv, SE2ConvType1):
     '''
     SE(2) Convolution in first Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
-                 interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0,
-                 restricted=False) -> None:
+    def __init__(self, in_channels, out_channels, kernel_size, freq_cutoff, n_radius=None, n_angle=None, dilation=1, padding=0, stride=1, output_padding=0, interpolation_type=1):
         
-        _SE2DeConv.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride, output_padding=output_padding)
+        _SE2DeConv.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff,
+                            n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride, output_padding=output_padding)
         
-        SE2ConvType1.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride, restricted=restricted)
+        SE2ConvType1.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff, 
+                              n_radius=n_radius, n_angle=n_angle, interpolation_type=interpolation_type, dilation=dilation, padding=padding, stride=stride)
 
     
 class SE2DeConvType2(_SE2DeConv, SE2ConvType2):
     '''
     SE(2) Convolution in higher Layer.
     '''
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle, max_m, 
-                 interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0,
-                 restricted=False) -> None:
+    def __init__(self, in_channels, out_channels, kernel_size, freq_cutoff, 
+                 n_radius=None, n_angle=None, interpolation_type=1,  dilation=1, padding=0, stride=1, output_padding=0) -> None:
         
-        _SE2DeConv.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride, output_padding=output_padding)
+        _SE2DeConv.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff,
+                            n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride, output_padding=output_padding)
         
-        SE2ConvType2.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                           n_radius=n_radius, n_angle=n_angle, max_m=max_m, 
-                                           interpolation_type=interpolation_type,
-                                           dilation=dilation, padding=padding, stride=stride, restricted=restricted)
+        SE2ConvType2.__init__(self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff, 
+                              n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride, interpolation_type=interpolation_type)
         
 #######################################################################################################################
 ################################################### Non-linearity #####################################################
 #######################################################################################################################
 
-class SE2CGNonLinearity(nn.Module):
+class SE2CGNonLinearity(torch.nn.Module):
     '''
     The Clebsch Gordan Non-Linearity Module
     '''
-    def __init__(self, max_m):
+    def __init__(self, freq_cutoff):
         super(SE2CGNonLinearity, self).__init__()
-        self.max_m = max_m
-        self.CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=max_m), dtype=torch.cfloat)
+        self.freq_cutoff = freq_cutoff
+        self.CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=freq_cutoff), dtype=torch.cfloat)
         
     def forward(self, x):
         CG_Matrix = self.CG_Matrix.to(x.device)
@@ -210,16 +149,16 @@ class SE2CGNonLinearity(nn.Module):
         return x
 
 
-class SE2NonLinearity(nn.Module):
+class SE2NonLinearity(torch.nn.Module):
     '''
     This module takes the tensor to the Time domain, performs a non-linearity
     there and then transforms it back to Fourier domain.
     The default non-linearity is ReLU.
     '''
-    def __init__(self, max_m, nonlinearity = nn.ReLU()):
+    def __init__(self, freq_cutoff, nonlinearity = torch.nn.ReLU()):
         super(SE2NonLinearity, self).__init__()
-        self.FT = torch.fft.fft(torch.eye(max_m, max_m)) / sqrt(max_m)
-        self.IFT = torch.fft.ifft(torch.eye(max_m, max_m)) / sqrt(max_m)
+        self.FT = torch.fft.fft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff)
+        self.IFT = torch.fft.ifft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff)
         self.nonlinearity = nonlinearity
 
     def forward(self, x):
@@ -233,16 +172,16 @@ class SE2NonLinearity(nn.Module):
         return x
     
 
-class SE2NormNonLinearity(nn.Module):
+class SE2NormNonLinearity(torch.nn.Module):
     '''
     This module takes the tensor applies non-linearity to absolute value of the tensor
     The default non-linearity is GELU.
     '''
-    def __init__(self, in_channels, max_m, nonlinearity = torch.nn.ReLU()):
+    def __init__(self, in_channels, freq_cutoff, nonlinearity = torch.nn.ReLU()):
         super(SE2NormNonLinearity, self).__init__()
         self.eps = 1e-5
         self.nonlinearity = nonlinearity
-        self.b = nn.Parameter(torch.randn(max_m, in_channels))
+        self.b = torch.nn.Parameter(torch.randn(freq_cutoff, in_channels))
 
     def forward(self, x):
         magnitude = x.abs() + self.eps
@@ -255,13 +194,12 @@ class SE2NormNonLinearity(nn.Module):
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-class SE2BatchNorm(nn.Module):
+class SE2BatchNorm(torch.nn.Module):
     def __init__(self):
         super(SE2BatchNorm, self).__init__()
         self.eps = 1e-5
 
     def forward(self, x):
-        #factor = x.abs() + self.eps
         factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps
         x = (x.real/factor) + 1j*(x.imag/factor)
 
@@ -271,10 +209,10 @@ class SE2BatchNorm(nn.Module):
 ################################################## Average Pooling Layer ##############################################
 #######################################################################################################################  
 
-class SE2AvgPool(nn.Module):
+class SE2AvgPool(torch.nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(SE2AvgPool, self).__init__()
-        self.pool = nn.AvgPool2d(*args, **kwargs)
+        self.pool = torch.nn.AvgPool2d(*args, **kwargs)
 
     def forward(self, x):
         x_shape = x.shape
@@ -288,7 +226,7 @@ class SE2AvgPool(nn.Module):
 ################################################### Invariant Layers ##################################################
 #######################################################################################################################
 
-class SE2NormFlatten(nn.Module):
+class SE2NormFlatten(torch.nn.Module):
     def __init__(self):
         super(SE2NormFlatten, self).__init__()
 
@@ -297,7 +235,7 @@ class SE2NormFlatten(nn.Module):
         x = torch.linalg.vector_norm(x, dim = (1,))
         return x
 
-class SE2Pooling(nn.Module):
+class SE2Pooling(torch.nn.Module):
     def __init__(self):
         super(SE2Pooling, self).__init__()
 
@@ -310,9 +248,7 @@ class SE2Pooling(nn.Module):
 ################################################### Complex Dropout ###################################################
 #######################################################################################################################
 
-
-
-class ComplexDropout(nn.Module):
+class ComplexDropout(torch.nn.Module):
     def __init__(self, p: float = 0.1, inplace: bool = False):
         super().__init__()
         if not 0 <= p < 1:

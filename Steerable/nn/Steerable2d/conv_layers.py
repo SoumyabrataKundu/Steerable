@@ -23,11 +23,6 @@ class _SE2Conv(torch.nn.Module):
         self.dilation = dilation if type(dilation) is tuple else (dilation, dilation)
         self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding)
         self.stride = stride if type(stride) is tuple else(stride, stride)
-
-        # Layer Parameters
-        self.weights = None
-        self.kernel = None
-        self.Fint = None
         
 
     def forward(self, x):
@@ -39,14 +34,14 @@ class _SE2Conv(torch.nn.Module):
         
         # Convolution
         x = x.reshape(x.shape[0], -1, *x.shape[-2:])
-        x = torch.conv2d(x, self.kernel.to(x.device), stride=self.stride, padding = self.padding, dilation=self.dilation)
+        x = torch.conv2d(x, self.kernel, stride=self.stride, padding = self.padding, dilation=self.dilation)
         x = x.reshape(x.shape[0], self.freq_cutoff, self.out_channels, *x.shape[-2:])
 
         return x
     
     def get_kernel(self):
         # Kernel Preparation
-        kernel = (self.weights @ self.Fint.to(self.weights.device)).reshape(self.freq_cutoff * self.out_channels, -1, *self.kernel_size)
+        kernel = (self.weights @ self.Fint).reshape(self.freq_cutoff * self.out_channels, -1, *self.kernel_size)
         return kernel
 
 class SE2ConvType1(_SE2Conv):
@@ -58,8 +53,9 @@ class SE2ConvType1(_SE2Conv):
                                            n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride)
         
         # Fint Matrix
-        self.Fint = get_Fint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
-        self.Fint = self.Fint.reshape(self.freq_cutoff, self.n_radius, -1)
+        Fint = get_Fint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
+        Fint = Fint.reshape(self.freq_cutoff, self.n_radius, -1)
+        self.register_buffer("Fint", Fint, persistent=False)
         self.weights = torch.nn.Parameter(torch.randn(self.freq_cutoff, self.out_channels * self.in_channels, self.n_radius, dtype=torch.cfloat))
 
     
@@ -71,8 +67,9 @@ class SE2ConvType2(_SE2Conv):
         super(SE2ConvType2, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff,
                                            n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride)
         # CFint Matrix
-        self.Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
-        self.Fint = self.Fint.reshape(self.freq_cutoff, 1, self.freq_cutoff, self.n_radius, -1)
+        Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
+        Fint = Fint.reshape(self.freq_cutoff, 1, self.freq_cutoff, self.n_radius, -1)
+        self.register_buffer("Fint", Fint, persistent=False)
         self.weights = torch.nn.Parameter(torch.randn(self.freq_cutoff, self.out_channels, self.freq_cutoff, self.in_channels, self.n_radius, dtype=torch.cfloat))
         
         
@@ -98,7 +95,7 @@ class _SE2DeConv(_SE2Conv):
         
         # Convolution
         x = x.reshape(x.shape[0], -1, *x.shape[-2:])
-        x = torch.nn.functional.conv_transpose2d(x, self.kernel.to(x.device).transpose(0,1), stride=self.stride, padding = self.padding, 
+        x = torch.nn.functional.conv_transpose2d(x, self.kernel.transpose(0,1), stride=self.stride, padding = self.padding, 
                                                  dilation=self.dilation, output_padding=self.output_padding)
         x = x.reshape(x.shape[0], self.freq_cutoff, self.out_channels, *x.shape[-2:])
 
@@ -141,12 +138,12 @@ class SE2CGNonLinearity(torch.nn.Module):
     def __init__(self, freq_cutoff):
         super(SE2CGNonLinearity, self).__init__()
         self.freq_cutoff = freq_cutoff
-        self.CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=freq_cutoff), dtype=torch.cfloat)
+        CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=freq_cutoff), dtype=torch.cfloat)
+        self.register_buffer("CG_Matrix", CG_Matrix, persistent=False)
         self.weight = torch.nn.Parameter(torch.randn(freq_cutoff, freq_cutoff, dtype=torch.cfloat))
         
     def forward(self, x):
-        CG_Matrix = self.CG_Matrix.to(x.device)
-        x = torch.einsum('lmn, bmoxy, bnoxy -> bloxy', CG_Matrix, x,x)
+        x = torch.einsum('lm, lmn, bmoxy, bnoxy -> bloxy', self.weight, self.CG_Matrix, x,x)
         return x
 
 
@@ -158,18 +155,15 @@ class SE2NonLinearity(torch.nn.Module):
     '''
     def __init__(self, freq_cutoff, nonlinearity = torch.nn.ReLU()):
         super(SE2NonLinearity, self).__init__()
-        self.FT = torch.fft.fft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff)
-        self.IFT = torch.fft.ifft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff)
+        self.register_buffer("FT", torch.fft.fft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff), persistent=False)
+        self.register_buffer("FT", torch.fft.ifft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff), persistent=False)
         self.nonlinearity = nonlinearity
 
     def forward(self, x):
         x_shape = x.shape
-        FT = self.FT.to(x.device)
-        IFT = self.IFT.to(x.device)
-        
-        x = IFT @ x.flatten(2)
+        x = self.IFT @ x.flatten(2)
         x = self.nonlinearity(x.real) + 1j*self.nonlinearity(x.imag)
-        x = (FT @ x).reshape(*x_shape)
+        x = (self.FT @ x).reshape(*x_shape)
         return x
     
 

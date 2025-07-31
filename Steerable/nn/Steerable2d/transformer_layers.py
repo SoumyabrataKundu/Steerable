@@ -189,4 +189,3 @@ class SE2ClassEmbeddings(torch.nn.Module):
         result = result.reshape(x.shape[0], classes.shape[-1], *x.shape[-2:])
         
         return result
-   

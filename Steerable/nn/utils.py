@@ -66,15 +66,17 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
 
 
 
-def get_CG_matrix(dimension, freq_cutoff):
+def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
     '''
     CG-Matrices
     '''
-    def get_CG_element(rho, rho1, rho2, freq_cutoff, dimension=2):
+    def get_CG_element(rho, rho1, rho2, freq_cutoff, n_angle=None, dimension=2):
         assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
         if dimension == 2:
-            CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % freq_cutoff == 0 else 0])
+            n_angle = n_angle if n_angle else freq_cutoff
+            CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % n_angle == 0 else 0])
         elif dimension == 3:
+            n_angle = n_angle if n_angle else 2*(freq_cutoff + 1)
             CG_tensor = torch.zeros(2*rho+1,2*rho1+1, 2*rho2+1)
             if rho>= abs(rho1-rho2)  and rho<= rho1+rho2:
                 a = rho1+rho2-rho
@@ -88,7 +90,7 @@ def get_CG_matrix(dimension, freq_cutoff):
     parts = freq_cutoff if dimension == 2 else freq_cutoff + 1
     dim = lambda rho: 1 if dimension == 2 else 2*rho+1
     
-    C =[[[dim(rho1) * dim(rho2) * get_CG_element(rho, rho1, rho2, freq_cutoff, dimension)/dim(rho)
+    C =[[[dim(rho1) * dim(rho2) * get_CG_element(rho, rho1, rho2, freq_cutoff, n_angle, dimension)/dim(rho)
                   for rho2 in range(parts)]
               for rho1 in range(parts)]
          for rho in range(parts)]
@@ -98,7 +100,6 @@ def get_CG_matrix(dimension, freq_cutoff):
 def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type=1, sigma=0.6):
     assert len(kernel_size) in [2,3], "Only 2 and 3 dimensions are supported."
     assert -1<= interpolation_type <= 5, "'interpolation_type' integer takes values between -1 and 1."
-    
     if interpolation_type == -1:
         points = torch.stack(torch.meshgrid(*[torch.arange(-kernel_size[d]/2, kernel_size[d]/2, 1) + 0.5 for d in range(len(kernel_size))], indexing='xy'), dim=0)
         r = torch.linalg.vector_norm(points, dim=0)
@@ -142,7 +143,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
 
 def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type=1):
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
-    C = get_CG_matrix(len(kernel_size), freq_cutoff)
+    C = get_CG_matrix(len(kernel_size), freq_cutoff, n_angle)
     if len(kernel_size) == 2:
         CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint)
 
@@ -175,7 +176,7 @@ def get_pos_encod(kernel_size, freq_cutoff):
         result = result.reshape(freq_cutoff, 1, num_points, 1, num_points)
         
     elif len(kernel_size) == 3:
-        theta = torch.arccos(pairwise_diffs[2] / torch.sqrt(r_square))
+        theta = torch.arccos(torch.clamp(pairwise_diffs[2] / torch.sqrt(r_square), -1.0, 1.0))
         phi = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
         phi_r = [torch.exp(-(r_square - l)) for l in range(freq_cutoff+1)]
         

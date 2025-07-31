@@ -135,10 +135,10 @@ class SE2CGNonLinearity(torch.nn.Module):
     '''
     The Clebsch Gordan Non-Linearity Module
     '''
-    def __init__(self, freq_cutoff):
+    def __init__(self, freq_cutoff, n_angle=None):
         super(SE2CGNonLinearity, self).__init__()
         self.freq_cutoff = freq_cutoff
-        CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=freq_cutoff), dtype=torch.cfloat)
+        CG_Matrix = torch.tensor(get_CG_matrix(dimension=2, freq_cutoff=freq_cutoff, n_angle=n_angle), dtype=torch.cfloat)
         self.register_buffer("CG_Matrix", CG_Matrix, persistent=False)
         self.weight = torch.nn.Parameter(torch.randn(freq_cutoff, freq_cutoff, dtype=torch.cfloat))
         

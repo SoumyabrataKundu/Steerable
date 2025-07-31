@@ -153,11 +153,14 @@ class SE2NonLinearity(torch.nn.Module):
     there and then transforms it back to Fourier domain.
     The default non-linearity is ReLU.
     '''
-    def __init__(self, freq_cutoff, nonlinearity = torch.nn.ReLU()):
+    def __init__(self, freq_cutoff, n_angle = None, nonlinearity = torch.nn.ReLU()):
         super(SE2NonLinearity, self).__init__()
-        self.register_buffer("FT", torch.fft.fft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff), persistent=False)
-        self.register_buffer("FT", torch.fft.ifft(torch.eye(freq_cutoff, freq_cutoff)) / sqrt(freq_cutoff), persistent=False)
+        self.n_angle = n_angle if n_angle else freq_cutoff
         self.nonlinearity = nonlinearity
+        
+        self.register_buffer("IFT", torch.fft.ifft(torch.eye(self.n_angle, freq_cutoff), dim=0, norm='ortho'), persistent=False)
+        self.register_buffer("FT", torch.fft.fft(torch.eye(freq_cutoff, self.n_angle), norm='ortho'), persistent=False)
+        
 
     def forward(self, x):
         x_shape = x.shape

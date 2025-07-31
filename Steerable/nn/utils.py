@@ -45,7 +45,7 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     Spherical Harmonic Transform Basis
     '''
     if dimension == 2:
-        FT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle)) / sqrt(n_angle))
+        FT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle), norm='ortho'))
     
     if dimension == 3:
         f = torch.zeros(n_angle, n_angle)

@@ -14,20 +14,22 @@ except:
 ##################################################################################################################################
 
 class SE3Conv(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_angle,
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius=None, n_angle=None,
                  dilation=1, padding=0, stride=1, interpolation_type=1):
         super(SE3Conv, self).__init__()
         
         # Layer Design
+        self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
+        self.out_channels = [out_channels] if type(out_channels) is not list and type(out_channels) is not tuple else out_channels
         self.kernel_size = (kernel_size, kernel_size, kernel_size) if type(kernel_size) is not tuple else kernel_size
-        self.dilation = (dilation, dilation, dilation) if type(kernel_size) is not tuple else dilation
+        self.dilation = (dilation, dilation, dilation) if type(dilation) is not tuple else dilation
         self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding, padding)
         self.stride = (stride, stride, stride) if type(stride) is not tuple else stride
 
-        self.n_radius = n_radius if n_radius else ceil(max(kernel_size) / 2)
-        self.n_angle = n_angle if n_angle else 2*(max(len(in_channels), len(out_channels)) + 1)
-        self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
-        self.out_channels = [out_channels] if type(out_channels) is not list and type(out_channels) is not tuple else out_channels
+        self.n_radius = n_radius if n_radius else ceil(max(self.kernel_size) / 2)
+        self.n_angle = n_angle if n_angle else 2*(max(len(self.in_channels), len(self.out_channels)) + 1)
+        
+        
         
         # Fint Matrix
         Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, max(len(self.out_channels), len(self.in_channels))-1, interpolation_type)

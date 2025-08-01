@@ -1,5 +1,4 @@
 from math import sqrt
-import pyshtools
 from scipy.ndimage import map_coordinates
 from scipy.ndimage.interpolation import rotate
 from scipy.special import sph_harm
@@ -8,17 +7,16 @@ from sympy.physics.quantum.cg import CG
 import torch
 
 ###########################################################################################################################
-######################################## Interpolation Matrix #############################################################
+############################################# Interpolation Matrix ########################################################
 ###########################################################################################################################
 
 def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order=1):
     R = torch.tensor([(kernel_size[i] - 1)/2 for i in range(len(kernel_size))])
-    A1 = torch.arange(0, torch.pi, torch.pi / n_angle)
-    A2 = torch.arange(0, 2*torch.pi, 2*torch.pi / n_angle)
+    A = torch.pi*torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
-    r_values = torch.vstack([torch.arange(r / (n_radius+1), r, r / (n_radius+1))[:n_radius] for r in R])
+    r_values = torch.vstack([torch.arange(1,n_radius+1) * r / (n_radius) for r in R])
     for i in range(len(kernel_size)-1):
-        A = A1 if i<len(kernel_size)-2 else A2
+        A = A if i<len(kernel_size)-2 else 2*A
         sphere_coord = torch.vstack([
                     torch.tensordot(sphere_coord[:-1], torch.ones(n_angle), dims=0),
                     torch.tensordot(sphere_coord[-1:], torch.cos(A), dims=0), 
@@ -36,7 +34,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     return I.reshape(n_radius, -1, *I.shape[-len(kernel_size):])
 
 ###########################################################################################################################
-######################################## Steerable Filter Basis ###########################################################
+############################################# Steerable Filter Basis ######################################################
 ###########################################################################################################################
 
 
@@ -48,20 +46,12 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
         SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle), norm='ortho'))
     
     if dimension == 3:
-        f = torch.zeros(n_angle, n_angle)
-        SHT = [torch.zeros(2*l + 1, n_angle * n_angle, dtype=torch.cfloat) for l in range(freq_cutoff + 1)]
-        index = 0
-        for theta in range(n_angle):
-            for phi in range(n_angle):
-                torch.zero_(f)
-                f[theta, phi] = 1
-
-                sh_transform = torch.from_numpy(pyshtools.expand.SHExpandDHC(f))
-                sh_transform = torch.hstack((torch.fliplr(sh_transform[1])[:, :-1], sh_transform[0]))
-
-                for l in range(freq_cutoff+1):
-                    SHT[l][:, index] = sh_transform[l,((n_angle//2 -1) - l):((n_angle//2 -1) + l + 1)]
-                index += 1
+        theta, phi = torch.meshgrid(torch.pi * torch.arange(n_angle) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
+        sines = torch.sin(theta)
+        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) * sqrt(4*torch.pi / (2*l+1)) * sines
+                            for m in range(-l, l+1)], dim=0).flatten(1)
+               for l in range(freq_cutoff + 1)]
+        
     return SHT 
 
 
@@ -78,13 +68,12 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
         elif dimension == 3:
             n_angle = n_angle if n_angle else 2*(freq_cutoff + 1)
             CG_tensor = torch.zeros(2*rho+1,2*rho1+1, 2*rho2+1)
-            if rho>= abs(rho1-rho2)  and rho<= rho1+rho2:
-                a = rho1+rho2-rho
-                for m1 in range(2*rho1+1):
-                    for m2 in range(2*rho2+1):
-                        m = m1+m2-a
-                        if m>=0 and m<=2*rho:
-                            CG_tensor[m,m1,m2] =  float(CG(rho1,m1-rho1,rho2,m2-rho2,rho,m-rho).doit())
+            if rho >= abs(rho1-rho2) and rho <= rho1+rho2:
+                for m1 in range(-rho1, rho1+1):
+                    for m2 in range(-rho2, rho2+1):
+                        m = m1+m2
+                        if abs(m) <= rho:
+                            CG_tensor[m+rho,m1+rho1,m2+rho2] =  float(CG(rho1,m1,rho2,m2,rho,m).doit())
         return CG_tensor
     
     parts = freq_cutoff if dimension == 2 else freq_cutoff + 1
@@ -118,7 +107,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
                 Y_lm_stack = []
                 for m in range(-l, l + 1):
                     # Compute spherical harmonics using scipy
-                    Y_lm = torch.from_numpy(sph_harm(m, l, theta.numpy(), phi.numpy())).type(torch.cfloat)
+                    Y_lm = torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)
                     Y_lm_stack.append(torch.complex(torch.nan_to_num(Y_lm.real, nan=0.0),
                                                     torch.nan_to_num(Y_lm.real, nan=0.0)))
                 Fint.append(torch.stack(Y_lm_stack, dim=0).reshape(-1, 1, *kernel_size)*tau_r)

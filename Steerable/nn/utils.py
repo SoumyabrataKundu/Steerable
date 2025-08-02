@@ -48,7 +48,7 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * torch.arange(n_angle) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
         sines = torch.sin(theta)
-        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) * sines
+        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) * sqrt(4 * torch.pi / (2*l+1)) * sines
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
         
@@ -71,7 +71,7 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
             if rho >= abs(rho1-rho2) and rho <= rho1+rho2:
                 for m1 in range(-rho1, rho1+1):
                     for m2 in range(-rho2, rho2+1):
-                        m = (m1+m2) % n_angle
+                        m = (m1+m2)
                         if abs(m) <= rho:
                             CG_tensor[m+rho,m1+rho1,m2+rho2] =  float(CG(rho1,m1,rho2,m2,rho,m).doit())
         return CG_tensor

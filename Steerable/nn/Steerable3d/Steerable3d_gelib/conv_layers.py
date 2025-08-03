@@ -1,92 +1,54 @@
-import torch
-import torch.nn as nn
+from math import ceil
 import gelib
 
-from Steerable.nn.Steerable3d.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
+import torch
+from Steerable.nn.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 
 ##################################################################################################################################
 ########################################################### First Layer ##########################################################
 ##################################################################################################################################
 
-class SE3Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, n_radius, n_theta,
-                 dilation=1, padding=0, stride=1, restricted=False, conv_first=False):
+class SE3Conv(torch.nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, n_radius=None, n_angle=None,
+                 dilation=1, padding=0, stride=1, interpolation_type=1):
         super(SE3Conv, self).__init__()
         
         # Layer Design
-        self.kernel_size = (kernel_size, kernel_size, kernel_size) if type(kernel_size) is not tuple else kernel_size
-        self.dilation = (dilation, dilation, dilation) if type(kernel_size) is not tuple else dilation
-        self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding, padding)
-        self.stride = (stride, stride, stride) if type(kernel_size) is not tuple else stride
-
-        self.n_radius = n_radius
-        self.n_theta = n_theta
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.out_channels = [out_channels] if type(out_channels) is not list and type(out_channels) is not tuple else out_channels
-        self.conv_first = conv_first
+        self.kernel_size = (kernel_size, kernel_size, kernel_size) if type(kernel_size) is not tuple else kernel_size
+        self.dilation = (dilation, dilation, dilation) if type(dilation) is not tuple else dilation
+        self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding, padding)
+        self.stride = (stride, stride, stride) if type(stride) is not tuple else stride
+
+        self.n_radius = n_radius if n_radius else ceil(max(self.kernel_size) / 2)
+        self.n_angle = n_angle if n_angle else 2*(max(len(self.in_channels), len(self.out_channels)) + 1)
+        
+        
         
         # Fint Matrix
-        self.Fint = get_CFint_matrix(self.kernel_size, n_radius, n_theta, n_theta, len(self.out_channels)-1, len(self.in_channels)-1, len(self.in_channels)-1)
-
-        if conv_first:
-            if restricted:
-                # Layer Parameters
-                self.weights = nn.ParameterList([nn.Parameter(
-                                            torch.randn(sum(self.in_channels) * n_radius, self.out_channels[l], dtype = torch.cfloat))
-                                            for l in range(len(self.out_channels))])
-                self.Fint = [torch.cat([t2.sum(dim=2) for t2 in t1], dim=0).flatten(0,1) for t1 in self.Fint]
-            
-            else:
-                # Layer Parameters
-                self.weights = nn.ParameterList([nn.Parameter(
-                                            torch.randn(sum(self.in_channels) * len(self.in_channels) * n_radius, self.out_channels[l], dtype = torch.cfloat))
-                                            for l in range(len(self.out_channels))])
-                self.Fint = [torch.cat(t, dim=0).flatten(0,2) for t in self.Fint]
-                
-        else:
-            if restricted:
-                self.weights = nn.ParameterList([nn.Parameter(
-                                                torch.randn(self.out_channels[l], 1, self.in_channels[l1], n_radius, dtype = torch.cfloat))
-                                                for l in range(len(self.out_channels)) for l1 in range(len(self.in_channels))])
-                self.Fint = [[t2.flatten(-3).sum(dim=2).transpose(1,2).unsqueeze(1) for t2 in t1] for t1 in self.Fint]
-            else:
-                self.weights = nn.ParameterList([nn.Parameter(
-                                            torch.randn(self.out_channels[l], 1, self.in_channels[l1], len(self.in_channels)*n_radius, dtype = torch.cfloat))
-                                            for l in range(len(self.out_channels)) for l1 in range(len(self.in_channels))])
-                self.Fint = [[t2.flatten(-3).flatten(1,2).transpose(1,2).unsqueeze(1) for t2 in t1] for t1 in self.Fint]
-
+        Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, max(len(self.out_channels), len(self.in_channels))-1, interpolation_type)
+        Fint = [[t2.flatten(-3).flatten(1,2).transpose(1,2).unsqueeze(1) for t2 in t1] for t1 in Fint]
+        for l in range(len(self.out_channels)):
+            for l1 in range(len(self.in_channels)):     
+                self.register_buffer(f'Fint_{l1}_{l}', Fint[l1][l], persistent=False)
+        self.weights = torch.nn.ParameterList([torch.nn.Parameter(
+                                    torch.randn(self.out_channels[l], 1, self.in_channels[l1], max(len(self.out_channels), len(self.in_channels))*self.n_radius, dtype = torch.cfloat))
+                                    for l in range(len(self.out_channels)) for l1 in range(len(self.in_channels))])
         
     def forward(self, x):
-        result = gelib.SO3vecArr()
-
         if type(x) is not gelib.SO3vecArr:
             inputs = gelib.SO3vecArr()
             inputs.parts.append(x.unsqueeze(4))
         else:
             inputs = x
-
-        if self.conv_first:
-            batch_size = inputs.parts[0].shape[0]
-            parts = []
-            
-            # Convolution
-            for l1, (part, c) in enumerate(zip(inputs.parts, self.in_channels)):
-                part = part.permute(0,5,4,1,2,3).flatten(0,1)
-                part = torch.conv3d(part, self.Fint[l1].to(part.device), stride=self.stride, padding = self.padding, dilation=self.dilation)
-                part = part.reshape(batch_size, c, len(self.out_channels)**2, -1, *part.shape[-3:]).permute(0,4,5,6,2,1,3).flatten(-2)
-                parts.append(part)
-            parts = torch.cat(parts, dim = -1)
-            
-            # Weight Multiplication
-            for l, c in enumerate(self.out_channels):
-                result.parts.append(parts[..., l**2:(l+1)**2,:] @ self.weights[l])
-            
-        else:
-            kernel = self.get_kernel()
-            x, _ = merge_channel_dim(inputs.parts, channel_last=True)
-            x = torch.conv3d(x.permute(0,4,1,2,3), kernel, stride=self.stride, padding=self.padding, dilation=self.dilation).permute(0,2,3,4,1)
-            result.parts = split_channel_dim(x, self.out_channels, channel_last=True)
-            
+        
+        kernel = self.get_kernel()
+        result = gelib.SO3vecArr()
+        x, _ = merge_channel_dim(inputs.parts, channel_last=True)
+        x = torch.conv3d(x.permute(0,4,1,2,3), kernel, stride=self.stride, padding=self.padding, dilation=self.dilation).permute(0,2,3,4,1)
+        result.parts = split_channel_dim(x, self.out_channels, channel_last=True)
+        
         return result
     
     def get_kernel(self):
@@ -95,7 +57,7 @@ class SE3Conv(nn.Module):
             kernels = []
             for l1 in range(len(self.in_channels)):
                 index = l1 + l*len(self.in_channels)
-                kernel_block = self.weights[index] @ self.Fint[l1][l].to(self.weights[index].device)
+                kernel_block = self.weights[index] @ getattr(self, f'Fint_{l1}_{l}')
                 kernel_block = kernel_block.reshape((2*l+1) * self.out_channels[l], -1, *self.kernel_size)
                 kernels.append(kernel_block)
                 
@@ -108,7 +70,7 @@ class SE3Conv(nn.Module):
 #################################################### Non-linearity #####################################################
 ########################################################################################################################
 
-class SE3CGNonLinearity(nn.Module):
+class SE3CGNonLinearity(torch.nn.Module):
     def __init__(self, in_channels):
         super(SE3CGNonLinearity, self).__init__()
 
@@ -117,7 +79,7 @@ class SE3CGNonLinearity(nn.Module):
         
         v = gelib.SO3vecArr.randn(1,[1], in_channels)
         v = gelib.DiagCGproduct(v,v,self.maxl)
-        self.weights = nn.ParameterList([nn.Parameter(
+        self.weights = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(v.parts[l].shape[-1], in_channels[l], dtype = torch.cfloat))
                                          for l in range(self.maxl + 1)])
     def forward(self, x):
@@ -125,14 +87,14 @@ class SE3CGNonLinearity(nn.Module):
         x.parts = [x.parts[l] @ self.weights[l] for l in range(self.maxl+1)]
         return x
 
-class SE3NormNonLinearity(nn.Module):
+class SE3NormNonLinearity(torch.nn.Module):
     def __init__(self, in_channels):
         super(SE3NormNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.ReLU()
         self.eps = 1e-5
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
-        self.b = nn.ParameterList([nn.Parameter(
+        self.b = torch.nn.ParameterList([torch.nn.Parameter(
                                     torch.randn(self.in_channels[l], dtype = torch.float))
                                   for l in range(len(self.in_channels))])
     def forward(self, x):
@@ -144,7 +106,7 @@ class SE3NormNonLinearity(nn.Module):
         
         return result
     
-class SE3GatedNonLinearity(nn.Module):
+class SE3GatedNonLinearity(torch.nn.Module):
     def __init__(self, in_channels, kernel_size, n_radius, n_theta):
         super(SE3GatedNonLinearity, self).__init__()
         
@@ -162,13 +124,12 @@ class SE3GatedNonLinearity(nn.Module):
             split_index += self.in_channels[l]
         
         return result
-            
-            
+
 #######################################################################################################################
 ################################################### Batch Normalization ###############################################
 #######################################################################################################################
 
-class SE3BatchNorm(nn.Module):
+class SE3BatchNorm(torch.nn.Module):
     def __init__(self):
         super(SE3BatchNorm, self).__init__()
         self.eps = 1e-5
@@ -186,10 +147,10 @@ class SE3BatchNorm(nn.Module):
 ################################################## Average Pooling Layer ##############################################
 #######################################################################################################################  
 
-class SE3AvgPool(nn.Module):
+class SE3AvgPool(torch.nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(SE3AvgPool, self).__init__()
-        self.pool = nn.AvgPool3d(*args, **kwargs)
+        self.pool = torch.nn.AvgPool3d(*args, **kwargs)
 
     def forward(self, x):
         result = gelib.SO3vecArr()
@@ -203,7 +164,7 @@ class SE3AvgPool(nn.Module):
 ################################################### Invariant Layers ##################################################
 #######################################################################################################################
 
-class SE3NormFlatten(nn.Module):
+class SE3NormFlatten(torch.nn.Module):
     def __init__(self):
         super(SE3NormFlatten, self).__init__()
 

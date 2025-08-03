@@ -12,11 +12,12 @@ import torch
 
 def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order=1):
     R = torch.tensor([(kernel_size[i] - 1)/2 for i in range(len(kernel_size))])
-    A = torch.pi*torch.arange(n_angle) / n_angle
+    A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
+    A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
     r_values = torch.vstack([torch.arange(1,n_radius+1) * r / (n_radius) for r in R])
     for i in range(len(kernel_size)-1):
-        A = A if i<len(kernel_size)-2 else 2*A
+        A = A1 if i<len(kernel_size)-2 else A2
         sphere_coord = torch.vstack([
                     torch.tensordot(sphere_coord[:-1], torch.ones(n_angle), dims=0),
                     torch.tensordot(sphere_coord[-1:], torch.cos(A), dims=0), 
@@ -46,15 +47,13 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
         SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle)))
     
     if dimension == 3:
-        theta, phi = torch.meshgrid(torch.pi * torch.arange(n_angle) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
-        volume_element = torch.cos(theta - torch.pi/(2*n_angle)) - torch.cos(theta + torch.pi/(2*n_angle))
+        theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
+        volume_element = torch.sin(theta)
         SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) * sqrt(4 * torch.pi / (2*l+1)) * volume_element
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
         
     return SHT 
-
-
 
 def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
     '''

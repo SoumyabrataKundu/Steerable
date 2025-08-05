@@ -63,7 +63,7 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
         assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
         if dimension == 2:
             n_angle = n_angle if n_angle else freq_cutoff
-            CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % n_angle == 0 else 0])
+            CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % freq_cutoff == 0 else 0])
         elif dimension == 3:
             n_angle = n_angle if n_angle else 2*(freq_cutoff + 1)
             CG_tensor = torch.zeros(2*rho+1,2*rho1+1, 2*rho2+1)

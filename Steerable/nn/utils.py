@@ -119,11 +119,11 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
-            Fint = torch.einsum('r, mt, rtxy -> mrxy', tau_r, SHT, I) / n_angle
+            Fint = torch.einsum('r, mt, rtxy -> mrxy', tau_r, SHT, I) / (n_angle*n_radius)
         elif len(kernel_size) == 3:
             I = get_interpolation_matrix((kernel_size[2], kernel_size[0], kernel_size[1]), n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
             I = torch.permute(I, (0,1,3,4,2))
-            Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', tau_r, SHT[l], I) / (n_angle**2) for l in range(freq_cutoff+1)] # Fint Matrix
+            Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', tau_r, SHT[l], I) / (n_radius*n_angle**2) for l in range(freq_cutoff+1)] # Fint Matrix
     
     return Fint
 

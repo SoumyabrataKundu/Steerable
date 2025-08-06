@@ -15,7 +15,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
     A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
-    r_values = torch.vstack([torch.arange(1,n_radius+1) * r / (n_radius) for r in R])
+    r_values = torch.vstack([torch.arange(r/(n_radius+1), r, r/(n_radius+1))[:n_radius] for r in R])
     for i in range(len(kernel_size)-1):
         A = A1 if i<len(kernel_size)-2 else A2
         sphere_coord = torch.vstack([
@@ -63,7 +63,7 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
         assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
         if dimension == 2:
             n_angle = n_angle if n_angle else freq_cutoff
-            CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % freq_cutoff == 0 else 0])
+            CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % n_angle == 0 else 0])
         elif dimension == 3:
             n_angle = n_angle if n_angle else 2*(freq_cutoff + 1)
             CG_tensor = torch.zeros(2*rho+1,2*rho1+1, 2*rho2+1)
@@ -119,11 +119,11 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
-            Fint = torch.einsum('r, mt, rtxy -> mrxy', tau_r, SHT, I)
+            Fint = torch.einsum('r, mt, rtxy -> mrxy', tau_r, SHT, I) / n_angle
         elif len(kernel_size) == 3:
             I = get_interpolation_matrix((kernel_size[2], kernel_size[0], kernel_size[1]), n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
             I = torch.permute(I, (0,1,3,4,2))
-            Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', tau_r, SHT[l], I) for l in range(freq_cutoff+1)] # Fint Matrix
+            Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', tau_r, SHT[l], I) / (n_angle**2) for l in range(freq_cutoff+1)] # Fint Matrix
     
     return Fint
 

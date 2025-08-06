@@ -11,6 +11,7 @@ import torch
 ###########################################################################################################################
 
 def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order=1):
+    assert 0<= interpolation_order <= 5, "'interpolation_order' takes integer values between 0 and 5."
     R = torch.tensor([(kernel_size[i] - 1)/2 for i in range(len(kernel_size))])
     A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
     A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
@@ -43,6 +44,7 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     '''
     Spherical Harmonic Transform Basis
     '''
+    assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
     if dimension == 2:
         SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle)))
     
@@ -59,8 +61,8 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
     '''
     CG-Matrices
     '''
+    assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
     def get_CG_element(rho, rho1, rho2, freq_cutoff, n_angle=None, dimension=2):
-        assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
         if dimension == 2:
             n_angle = n_angle if n_angle else freq_cutoff
             CG_tensor = torch.tensor([1 if (rho1+rho2-rho) % n_angle == 0 else 0])
@@ -85,8 +87,11 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
     return C
 
 def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type=1, sigma=0.6):
+    '''
+    Fusing Fourier (SHT) and Interpolation Matrix to give F-int matrix
+    '''
     assert len(kernel_size) in [2,3], "Only 2 and 3 dimensions are supported."
-    assert -1<= interpolation_type <= 5, "'interpolation_type' integer takes values between -1 and 1."
+    assert -1 <= interpolation_type <= 5, "'interpolation_type' takes integer values between -1 and 5."
     if interpolation_type == -1:
         points = torch.stack(torch.meshgrid(*[torch.arange(-kernel_size[d]/2, kernel_size[d]/2, 1) + 0.5 for d in range(len(kernel_size))], indexing='xy'), dim=0)
         r = torch.linalg.vector_norm(points, dim=0)
@@ -125,6 +130,11 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
     return Fint
 
 def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff_out, interpolation_type=1):
+    '''
+    Fusing Clebsch-Gordan Matrices with Fint Matrix (above) to give C-Fint matrix
+    '''
+    assert len(kernel_size) in [2,3], "Only 2 and 3 dimensions are supported."
+    assert -1 <= interpolation_type <= 5, "'interpolation_type' takes integer values between -1 and 5."
     freq_cutoff = max(freq_cutoff_in, freq_cutoff_out)
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(len(kernel_size), freq_cutoff, n_angle)
@@ -181,8 +191,9 @@ def get_pos_encod(kernel_size, freq_cutoff):
 #######################################################################################################################
 
 def rotate_image(image, degree=None, order=5, batched=False):
+    assert 0 <= order <= 5, "'order' takes integer values between 0 and 5."
     dimension = image.ndim - 2 if batched else image.ndim - 1
-    assert dimension in [2,3], "Only w and 3 dimensions are supported."
+    assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
     if degree is None:
         if dimension == 2:
             degree = torch.randint(0, 360, (1,)).item()

@@ -124,8 +124,6 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
     
     return Fint
 
-
-
 def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff_out, interpolation_type=1):
     freq_cutoff = max(freq_cutoff_in, freq_cutoff_out)
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)

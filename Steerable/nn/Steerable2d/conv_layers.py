@@ -67,7 +67,8 @@ class SE2ConvType2(_SE2Conv):
         super(SE2ConvType2, self).__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, freq_cutoff=freq_cutoff,
                                            n_radius=n_radius, n_angle=n_angle, dilation=dilation, padding=padding, stride=stride)
         # CFint Matrix
-        Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, self.freq_cutoff, interpolation_type)
+        Fint = get_CFint_matrix(kernel_size=self.kernel_size, n_radius=self.n_radius, n_angle=self.n_angle, 
+                                freq_cutoff_in=self.freq_cutoff, freq_cutoff_out=self.freq_cutoff, interpolation_type=interpolation_type)
         Fint = Fint.reshape(self.freq_cutoff, 1, self.freq_cutoff, self.n_radius, -1)
         self.register_buffer("Fint", Fint, persistent=False)
         self.weights = torch.nn.Parameter(torch.randn(self.freq_cutoff, self.out_channels, self.freq_cutoff, self.in_channels, self.n_radius, dtype=torch.cfloat))

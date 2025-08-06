@@ -32,7 +32,8 @@ class SE3Conv(torch.nn.Module):
         
         
         # Fint Matrix
-        Fint = get_CFint_matrix(self.kernel_size, self.n_radius, self.n_angle, max(len(self.out_channels), len(self.in_channels))-1, interpolation_type)
+        Fint = get_CFint_matrix(kernel_size=self.kernel_size, n_radius=self.n_radius, n_angle=self.n_angle, 
+                                freq_cutoff_in=len(self.in_channels)-1, freq_cutoff_out=len(self.out_channels)-1, interpolation_type=interpolation_type)
         Fint = [[t2.flatten(-3).flatten(1,2).transpose(1,2).unsqueeze(1) for t2 in t1] for t1 in Fint]
         for l in range(len(self.out_channels)):
             for l1 in range(len(self.in_channels)):     

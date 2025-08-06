@@ -15,7 +15,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
     A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
-    r_values = torch.vstack([torch.arange(1, (n_radius+1))*h/(n_radius+1) for h in R])
+    r_values = torch.vstack([torch.arange(1, (n_radius+1))*h/n_radius for h in R])
     for i in range(len(kernel_size)-1):
         A = A1 if i<len(kernel_size)-2 else A2
         sphere_coord = torch.vstack([
@@ -49,7 +49,7 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
         volume_element = torch.sin(theta)
-        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) * sqrt(4 * torch.pi / (2*l+1)) * volume_element
+        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * volume_element
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
         
@@ -76,9 +76,8 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
         return CG_tensor
     
     parts = freq_cutoff if dimension == 2 else freq_cutoff + 1
-    dim = lambda rho: 1 if dimension == 2 else 2*rho+1
     
-    C =[[[dim(rho1) * dim(rho2) * get_CG_element(rho, rho1, rho2, freq_cutoff, n_angle, dimension)/dim(rho)
+    C =[[[get_CG_element(rho, rho1, rho2, freq_cutoff, n_angle, dimension)
                   for rho2 in range(parts)]
               for rho1 in range(parts)]
          for rho in range(parts)]
@@ -113,32 +112,31 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        R = [(kernel_size[d] - 1) / 2 for d in range(len(kernel_size))]
-        r = torch.vstack([torch.arange(R[i] / (n_radius+1), R[i], R[i] / (n_radius+1))[:n_radius] for i in range(len(kernel_size))])
-        tau_r = torch.prod(r, dim=0)**((len(kernel_size)-1)/len(kernel_size))
+        scalar = (torch.arange(1, n_radius+1)**(len(kernel_size)-1)) / (n_radius*len(kernel_size)) * ((n_angle)**(len(kernel_size)-1))
         SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
-            Fint = torch.einsum('r, mt, rtxy -> mrxy', tau_r, SHT, I) / (n_angle*n_radius)
+            Fint = torch.einsum('r, mt, rtxy -> mrxy', scalar, SHT, I)
         elif len(kernel_size) == 3:
             I = get_interpolation_matrix((kernel_size[2], kernel_size[0], kernel_size[1]), n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
             I = torch.permute(I, (0,1,3,4,2))
-            Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', tau_r, SHT[l], I) / (n_radius*n_angle**2) for l in range(freq_cutoff+1)] # Fint Matrix
+            Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', scalar, SHT[l], I) for l in range(freq_cutoff+1)] # Fint Matrix
     
     return Fint
 
 
 
-def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type=1):
+def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff_out, interpolation_type=1):
+    freq_cutoff = max(freq_cutoff_in, freq_cutoff_out)
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(len(kernel_size), freq_cutoff, n_angle)
     if len(kernel_size) == 2:
-        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / freq_cutoff
+        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / (freq_cutoff_in*freq_cutoff_out)
 
     elif len(kernel_size) == 3:
-        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / (freq_cutoff+1)
+        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / ((freq_cutoff_in+1)*(freq_cutoff_out+1))
                   for l2 in range(freq_cutoff+1)], dim=2)
-              for l in range(freq_cutoff+1)] for l1 in range(freq_cutoff+1)]
+              for l in range(freq_cutoff_out+1)] for l1 in range(freq_cutoff_in+1)]
 
     return CFint
 

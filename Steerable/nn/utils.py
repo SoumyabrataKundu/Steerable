@@ -78,7 +78,6 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
         return CG_tensor
     
     parts = freq_cutoff if dimension == 2 else freq_cutoff + 1
-    
     C =[[[get_CG_element(rho, rho1, rho2, freq_cutoff, n_angle, dimension)
                   for rho2 in range(parts)]
               for rho1 in range(parts)]
@@ -115,9 +114,10 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
                                                     torch.nan_to_num(Y_lm.real, nan=0.0)))
                 Fint.append(torch.stack(Y_lm_stack, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
         
-        
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        scalar = (torch.arange(1, n_radius+1)**(len(kernel_size)-1)) / ((n_radius+1)*len(kernel_size)) * ((n_angle)**(len(kernel_size)-1))
+        d = len(kernel_size)
+        r = torch.arange(1, n_radius+1)
+        scalar = ((r/(n_radius))**(d-1)) / (n_radius * (n_angle**(d-1)))
         SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
@@ -139,7 +139,7 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(len(kernel_size), freq_cutoff, n_angle)
     if len(kernel_size) == 2:
-        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / (freq_cutoff_in*freq_cutoff_out)
+        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / (freq_cutoff_in)
 
     elif len(kernel_size) == 3:
         CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / ((freq_cutoff_in+1)*(freq_cutoff_out+1))
@@ -185,7 +185,6 @@ def get_pos_encod(kernel_size, freq_cutoff):
 
     return result
 
-
 #######################################################################################################################
 ################################################### Rotate Image  #####################################################
 #######################################################################################################################
@@ -216,7 +215,6 @@ def rotate_image(image, degree=None, order=5, batched=False):
     image = torch.vstack([rotate_slice_image(image[i], degree) for i in range(image.shape[0])]).view(*image_shape)
     
     return image
-
 
 #########################################################################################################################
 ####################################### Merge and Split Channels (3D) ###################################################

@@ -1,5 +1,5 @@
 import torch
-from math import sqrt, ceil
+from math import ceil
 from Steerable.nn.utils import get_Fint_matrix, get_CFint_matrix, get_CG_matrix
 
 #######################################################################################################################

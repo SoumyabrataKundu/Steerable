@@ -16,7 +16,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
     A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
-    r_values = torch.vstack([torch.arange(1, (n_radius+1))*h/n_radius for h in R])
+    r_values = torch.vstack([torch.arange(1, (n_radius+1))*h/(n_radius+1) for h in R])
     for i in range(len(kernel_size)-1):
         A = A1 if i<len(kernel_size)-2 else A2
         sphere_coord = torch.vstack([
@@ -117,7 +117,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        scalar = (torch.arange(1, n_radius+1)**(len(kernel_size)-1)) / (n_radius*len(kernel_size)) * ((n_angle)**(len(kernel_size)-1))
+        scalar = (torch.arange(1, n_radius+1)**(len(kernel_size)-1)) / ((n_radius+1)*len(kernel_size)) * ((n_angle)**(len(kernel_size)-1))
         SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix

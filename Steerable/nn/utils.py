@@ -51,8 +51,8 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
-        volume_element = torch.sin(theta)
-        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * volume_element
+        area_element = torch.sin(theta)
+        SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * area_element
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
         

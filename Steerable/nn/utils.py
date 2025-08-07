@@ -51,6 +51,7 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
         volume_element = torch.sin(theta)
+        volume_element = volume_element / torch.sum(volume_element)
         SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * volume_element
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
@@ -117,7 +118,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
         d = len(kernel_size)
         r = torch.arange(1, n_radius+1)
-        scalar = (r**(d-1)) / ((n_radius**d) * (n_angle**(d-1)))
+        scalar = (r**(d-1)) / ((n_radius**d))
         SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
         if len(kernel_size) == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix

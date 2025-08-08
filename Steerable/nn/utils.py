@@ -141,10 +141,10 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(d, freq_cutoff, n_angle)
     if d == 2:
-        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / (freq_cutoff_in)
+        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / freq_cutoff
 
     elif d == 3:
-        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / ((freq_cutoff_in+1)*(freq_cutoff_out+1))
+        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / (freq_cutoff+1)
                   for l2 in range(freq_cutoff+1)], dim=2)
               for l in range(freq_cutoff_out+1)] for l1 in range(freq_cutoff_in+1)]
 

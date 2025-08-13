@@ -98,9 +98,10 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         points = torch.stack(torch.meshgrid(*[torch.arange(-kernel_size[i]/2, kernel_size[i]/2, 1) + 0.5 for i in range(d)], indexing='xy'), dim=0)
         r = torch.linalg.vector_norm(points, dim=0)
         tau_r = torch.exp(-((r - torch.arange(1,n_radius+1).reshape(-1,*[1]*d))**2)/(2*(sigma**2))).type(torch.cfloat)
-        
+        tau_r[:,r==0] = 0
         if d == 2:
             tau_r[-1] = torch.exp(-((r - n_radius)**2)/(2*(0.4**2))).type(torch.cfloat)
+            tau_r[-1,r==0] = 0
             theta = torch.arctan2(points[1], points[0])
             Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(freq_cutoff)], dim=0)
             Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)

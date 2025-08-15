@@ -26,22 +26,23 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
                     torch.tensordot(sphere_coord[-1:], torch.cos(A), dims=0), 
                     torch.tensordot(sphere_coord[-1:], torch.sin(A), dims=0)])
     sphere_coord = (torch.einsum('dr, da -> dra', r_values, sphere_coord.flatten(1)) + R.reshape(-1, 1,1)).flatten(1)
-    
-    # if interpolation_order == 0:
-    #     integer = (torch.floor(sphere_coord).T).type(torch.int64)
-    #     fraction = sphere_coord.T - integer
-    #     increment = torch.cartesian_prod(*[torch.tensor([0,1]) for _ in range(d)])
-    #     for i in range(len(integer)):
-    #         for j in range(len(increment)):
-    #             I[(i,) + tuple((integer[i] + increment[j]).tolist())] = torch.all(((1-fraction[i]) ** (1-increment[j])) * (fraction[i]**increment[j]) >= 0.5-1e-7)
-    #     I = I / I.sum(dim=torch.arange(1,d+1).tolist(), keepdim=True)
-    
     I = torch.zeros(n_radius * n_angle**(d-1), *kernel_size, dtype=torch.float)
-    kernel = torch.cartesian_prod(*[torch.arange(0, kernel_size[i], 1) for i in range(d)])
-    for i in range(len(kernel)):
-        f = torch.zeros(*kernel_size)
-        f[tuple(kernel[i].tolist())] = 1
-        I[(Ellipsis,) + tuple(kernel[i].tolist())] = torch.from_numpy(map_coordinates(f, sphere_coord, order=interpolation_order, mode='nearest'))
+    
+    if interpolation_order == 0:
+        integer = (torch.floor(sphere_coord).T).type(torch.int64)
+        fraction = sphere_coord.T - integer
+        increment = torch.cartesian_prod(*[torch.tensor([0,1]) for _ in range(d)])
+        for i in range(len(integer)):
+            for j in range(len(increment)):
+                I[(i,) + tuple((integer[i] + increment[j]).tolist())] = torch.all(((1-fraction[i]) ** (1-increment[j])) * (fraction[i]**increment[j]) >= 0.5-1e-7)
+        I = I / I.sum(dim=torch.arange(1,d+1).tolist(), keepdim=True)
+    
+    else:
+        kernel = torch.cartesian_prod(*[torch.arange(0, kernel_size[i], 1) for i in range(d)])
+        for i in range(len(kernel)):
+            f = torch.zeros(*kernel_size)
+            f[tuple(kernel[i].tolist())] = 1
+            I[(Ellipsis,) + tuple(kernel[i].tolist())] = torch.from_numpy(map_coordinates(f, sphere_coord, order=interpolation_order, mode='nearest'))
 
     return I.reshape(n_radius, -1, *I.shape[-d:])
 

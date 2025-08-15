@@ -27,22 +27,11 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
                     torch.tensordot(sphere_coord[-1:], torch.sin(A), dims=0)])
     sphere_coord = (torch.einsum('dr, da -> dra', r_values, sphere_coord.flatten(1)) + R.reshape(-1, 1,1)).flatten(1)
     I = torch.zeros(n_radius * n_angle**(d-1), *kernel_size, dtype=torch.float)
-    
-    if interpolation_order == 0:
-        integer = (torch.floor(sphere_coord).T).type(torch.int64)
-        fraction = sphere_coord.T - integer
-        increment = torch.cartesian_prod(*[torch.tensor([0,1]) for _ in range(d)])
-        for i in range(len(integer)):
-            for j in range(len(increment)):
-                I[(i,) + tuple((integer[i] + increment[j]).tolist())] = torch.all(((1-fraction[i]) ** (1-increment[j])) * (fraction[i]**increment[j]) >= 0.5-1e-7)
-        I = I / I.sum(dim=torch.arange(1,d+1).tolist(), keepdim=True)
-    
-    else:
-        kernel = torch.cartesian_prod(*[torch.arange(0, kernel_size[i], 1) for i in range(d)])
-        for i in range(len(kernel)):
-            f = torch.zeros(*kernel_size)
-            f[tuple(kernel[i].tolist())] = 1
-            I[(Ellipsis,) + tuple(kernel[i].tolist())] = torch.from_numpy(map_coordinates(f, sphere_coord, order=interpolation_order, mode='nearest'))
+    kernel = torch.cartesian_prod(*[torch.arange(0, kernel_size[i], 1) for i in range(d)])
+    for i in range(len(kernel)):
+        f = torch.zeros(*kernel_size)
+        f[tuple(kernel[i].tolist())] = 1
+        I[(Ellipsis,) + tuple(kernel[i].tolist())] = torch.from_numpy(map_coordinates(f, sphere_coord, order=interpolation_order, mode='nearest'))
 
     return I.reshape(n_radius, -1, *I.shape[-d:])
 
@@ -117,17 +106,12 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
             Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
             
         elif d == 3:
-            theta = torch.acos(torch.clamp(points[2] / r, -1.0, 1.0))
+            theta = torch.nan_to_num(torch.acos(torch.clamp(points[2] / r, -1.0, 1.0)), nan=0.0)
             phi = torch.arctan2(points[1], points[0])
             Fint = []
             for l in range(freq_cutoff+1):
-                Y_lm_stack = []
-                for m in range(-l, l + 1):
-                    # Compute spherical harmonics using scipy
-                    Y_lm = torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)
-                    Y_lm_stack.append(torch.complex(torch.nan_to_num(Y_lm.real, nan=0.0),
-                                                    torch.nan_to_num(Y_lm.real, nan=0.0)))
-                Fint.append(torch.stack(Y_lm_stack, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
+                Y_l = [torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) for m in range(-l, l + 1)]
+                Fint.append(torch.stack(Y_l, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
         scalar = ((torch.arange(1, n_radius+1) /(n_radius+1) )**(d-1)) / (n_radius)

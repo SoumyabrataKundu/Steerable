@@ -170,4 +170,3 @@ class SegmentationDataset(torch.utils.data.Dataset):
         
         iou = 0 if torch.any(intersection_max<intersection_min) else torch.prod(intersection_max-intersection_min) / (A1 + A2)
         return iou
-

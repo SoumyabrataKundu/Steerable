@@ -4,10 +4,10 @@ import torch
 from Steerable.nn.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 
 gelib_installed = True
-try:
-    import gelib
-except:
-    gelib_installed = False
+#try:
+#    import gelib
+#except:
+#    gelib_installed = False
 
 ##################################################################################################################################
 ########################################################### First Layer ##########################################################

@@ -67,14 +67,14 @@ class HDF5Dataset:
         
         input = input if batched else input.unsqueeze(0)
         target = target if batched else target.unsqueeze(0)
-        assert input.shape[0] == target.shape[0]
+        assert input.shape[0] == target.shape[0], 'Number of examples in input and target should match.'
         
         input = input.flatten(1) if variable_length else input
         target = target.flatten(1) if variable_length else target
         
         inputs.resize((len(inputs) + len(input),) + tuple(inputs.shape[1:]))
         targets.resize((len(targets) + len(target),) + tuple(targets.shape[1:]))
-            
+
         inputs[-len(input):] = input
         targets[-len(target):] = target
             

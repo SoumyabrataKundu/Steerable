@@ -46,12 +46,11 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     '''
     assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
     if dimension == 2:
-        quadrature = 1 / n_angle
-        SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle))) * quadrature
+        SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle)))
     
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
-        quadrature = torch.sin(theta) / (n_angle**2)
+        quadrature = torch.sin(theta)
         SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * quadrature
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
@@ -114,7 +113,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
                 Fint.append(torch.stack(Y_l, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        scalar = (torch.arange(1, n_radius+1)**(d-1)) / (n_radius**d)
+        scalar = (torch.arange(1, n_radius+1)**(d-1)) #/ ((n_radius**d) * (n_angle**(d-1)))
         SHT = get_SHT_matrix(n_angle, freq_cutoff, d) # Spherical Harmonic Transform Matrix
         if d == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
@@ -137,10 +136,10 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(d, freq_cutoff, n_angle)
     if d == 2:
-        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / freq_cutoff
+        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) #/ freq_cutoff
 
     elif d == 3:
-        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / (freq_cutoff+1)
+        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) #/ (freq_cutoff+1)
                   for l2 in range(freq_cutoff+1)], dim=2)
               for l in range(freq_cutoff_out+1)] for l1 in range(freq_cutoff_in+1)]
 

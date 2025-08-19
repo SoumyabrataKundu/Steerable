@@ -114,7 +114,7 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
         
     elif 0 <= interpolation_type and interpolation_type <=5 and type(interpolation_type) == int:
         h = torch.prod(torch.tensor([(kernel_size[i] - 1)/2 for i in range(d)]))**(1/d)
-        scalar = ((torch.arange(1, n_radius+1)**(d-1)) * (h**(d-1))) / (n_radius**(d-1))
+        scalar = ((torch.arange(1, n_radius+1)**(d-1)) * h**(d-1) ) / ((n_radius**(d-1)) * (n_angle**(d-1)))
         SHT = get_SHT_matrix(n_angle, freq_cutoff, d) # Spherical Harmonic Transform Matrix
         if d == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix

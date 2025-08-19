@@ -39,6 +39,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
 ############################################# Steerable Filter Basis ######################################################
 ###########################################################################################################################
 
+
 def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     '''
     Spherical Harmonic Transform Basis
@@ -85,9 +86,12 @@ def get_CG_matrix(dimension, freq_cutoff, n_angle=None):
     return C
 
 def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type=1, sigma=0.6):
+    '''
+    Fusing Fourier (SHT) and Interpolation Matrix to give F-int matrix
+    '''
     d = len(kernel_size)
     assert d in [2,3], "Only 2 and 3 dimensions are supported."
-    assert -1<= interpolation_type <= 5, "'interpolation_type' integer takes values between -1 and 1."
+    assert -1 <= interpolation_type <= 5, "'interpolation_type' takes integer values between -1 and 5."
     if interpolation_type == -1:
         points = torch.stack(torch.meshgrid(*[torch.arange(-kernel_size[i]/2, kernel_size[i]/2, 1) + 0.5 for i in range(d)], indexing='xy'), dim=0)
         r = torch.linalg.vector_norm(points, dim=0)
@@ -108,22 +112,19 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
                 Y_l = [torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) for m in range(-l, l + 1)]
                 Fint.append(torch.stack(Y_l, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
         
-        
-    elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        h = torch.prod(torch.tensor([(kernel_size[i] - 1) / 2 for i in range(len(kernel_size))])) ** (1/len(kernel_size))
-        scalar = (torch.arange(1,n_radius+1) * h / (n_radius+1)) ** (len(kernel_size)-1)
-        SHT = get_SHT_matrix(n_angle, freq_cutoff, len(kernel_size)) # Spherical Harmonic Transform Matrix
-        if len(kernel_size) == 2:
+    elif 0 <= interpolation_type and interpolation_type <=5 and type(interpolation_type) == int:
+        h = torch.prod(torch.tensor([(kernel_size[i] - 1)/2 for i in range(d)]))**(1/d)
+        scalar = ((torch.arange(1, n_radius+1)**(d-1))  ) / ((n_radius*n_angle)**(d-1))
+        SHT = get_SHT_matrix(n_angle, freq_cutoff, d) # Spherical Harmonic Transform Matrix
+        if d == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
-            Fint1 = torch.einsum('r, mt, rtxy -> mrxy', scalar, SHT, I)
-        elif len(kernel_size) == 3:
+            Fint = torch.einsum('r, mt, rtxy -> mrxy', scalar, SHT, I)
+        elif d == 3:
             I = get_interpolation_matrix((kernel_size[2], kernel_size[0], kernel_size[1]), n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
             I = torch.permute(I, (0,1,3,4,2))
             Fint = [torch.einsum('r, lt, rtxyz -> lrxyz', scalar, SHT[l], I) for l in range(freq_cutoff+1)] # Fint Matrix
     
     return Fint
-
-
 
 def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff_out, interpolation_type=1):
     '''
@@ -151,22 +152,22 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
 
 def get_pos_encod(kernel_size, freq_cutoff):    
     # Compute Pairwise differences
-    points = torch.stack(torch.meshgrid(*[torch.arange(0, kernel_size[d], 1) for d in range(len(kernel_size))], indexing='ij'), dim=0).flatten(1)
+    d = len(kernel_size)
+    points = torch.stack(torch.meshgrid(*[torch.arange(0, kernel_size[i], 1) for i in range(d)], indexing='ij'), dim=0).flatten(1)
     
     num_points = points.shape[-1]
     pairwise_diffs = points.unsqueeze(-1) - points.unsqueeze(1)
-    pairwise_diffs = pairwise_diffs.view(len(kernel_size), -1)  
+    pairwise_diffs = pairwise_diffs.view(d, -1)  
     r_square = torch.sum(pairwise_diffs**2, dim=0)
     
-
-    if len(kernel_size) == 2:
+    if d == 2:
         phi_r = torch.stack([torch.exp(-(r_square).reshape(num_points, num_points) / 2).fill_diagonal_(0) for m in range(freq_cutoff)], dim=0)
         theta = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
         result = torch.stack([torch.exp( m *1j * theta) for m in range(freq_cutoff)], dim = 0)
         result = result.reshape(freq_cutoff, num_points, num_points) * phi_r
         result = result.reshape(freq_cutoff, 1, num_points, 1, num_points)
         
-    elif len(kernel_size) == 3:
+    elif d == 3:
         theta = torch.arccos(torch.clamp(pairwise_diffs[2] / torch.sqrt(r_square), -1.0, 1.0))
         phi = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
         phi_r = [torch.exp(-(r_square - l)) for l in range(freq_cutoff+1)]
@@ -182,14 +183,14 @@ def get_pos_encod(kernel_size, freq_cutoff):
 
     return result
 
-
 #######################################################################################################################
 ################################################### Rotate Image  #####################################################
 #######################################################################################################################
 
 def rotate_image(image, degree=None, order=5, batched=False):
+    assert 0 <= order <= 5, "'order' takes integer values between 0 and 5."
     dimension = image.ndim - 2 if batched else image.ndim - 1
-    assert dimension in [2,3], "Only w and 3 dimensions are supported."
+    assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
     if degree is None:
         if dimension == 2:
             degree = torch.randint(0, 360, (1,)).item()
@@ -212,7 +213,6 @@ def rotate_image(image, degree=None, order=5, batched=False):
     image = torch.vstack([rotate_slice_image(image[i], degree) for i in range(image.shape[0])]).view(*image_shape)
     
     return image
-
 
 #########################################################################################################################
 ####################################### Merge and Split Channels (3D) ###################################################

@@ -26,19 +26,22 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
                     torch.tensordot(sphere_coord[-1:], torch.cos(A), dims=0), 
                     torch.tensordot(sphere_coord[-1:], torch.sin(A), dims=0)])
     sphere_coord = (torch.einsum('dr, da -> dra', r_values, sphere_coord.flatten(1)) + R.reshape(-1, 1,1)).flatten(1)
-    I = torch.zeros(n_radius * n_angle**(d-1), *kernel_size, dtype=torch.float)
     
     if interpolation_order == 0:
+        I = torch.zeros(n_radius * n_angle**(d-1), *[kernel_size[i]+1 for i in range(d)], dtype=torch.float)
         sphere_coord = sphere_coord.T.unsqueeze(1)
         integer = torch.floor(sphere_coord).type(torch.int64)
         fraction = sphere_coord - integer
         increment = torch.cartesian_prod(*[torch.tensor([0,1]) for _ in range(d)]).unsqueeze(0)
         values = ((((1 - fraction) ** (1 - increment)) * (fraction ** increment)) >= 0.5 - 1e-7).all(dim=2).flatten().float()
         coords = torch.cat([torch.arange(I.shape[0]).repeat_interleave(2**d).unsqueeze(1), (integer + increment).flatten(0,1)], dim=1)
+        
         I[tuple(coords.T.tolist())] = values
+        I = I[:, :-1, :-1]
         I = I / I.sum(dim=torch.arange(1,d+1).tolist(), keepdim=True)
     
     else:
+        I = torch.zeros(n_radius * n_angle**(d-1), *kernel_size, dtype=torch.float)
         kernel = torch.cartesian_prod(*[torch.arange(0, kernel_size[i], 1) for i in range(d)])
         for i in range(len(kernel)):
             f = torch.zeros(*kernel_size)

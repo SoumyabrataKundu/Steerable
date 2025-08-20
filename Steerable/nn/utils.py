@@ -29,12 +29,13 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     I = torch.zeros(n_radius * n_angle**(d-1), *kernel_size, dtype=torch.float)
     
     if interpolation_order == 0:
-        integer = (torch.floor(sphere_coord).T).type(torch.int64)
-        fraction = sphere_coord.T - integer
-        increment = torch.cartesian_prod(*[torch.tensor([0,1]) for _ in range(d)])
-        for i in range(len(integer)):
-            for j in range(len(increment)):
-                I[(i,) + tuple((integer[i] + increment[j]).tolist())] = torch.all(((1-fraction[i]) ** (1-increment[j])) * (fraction[i]**increment[j]) >= 0.5-1e-7)
+        sphere_coord = sphere_coord.T.unsqueeze(1)
+        integer = torch.floor(sphere_coord).type(torch.int64)
+        fraction = sphere_coord - integer
+        increment = torch.cartesian_prod(*[torch.tensor([0,1]) for _ in range(d)]).unsqueeze(0)
+        values = ((((1 - fraction) ** (1 - increment)) * (fraction ** increment)) >= 0.5 - 1e-7).all(dim=2).flatten().float()
+        coords = torch.cat([torch.arange(I.shape[0]).repeat_interleave(2**d).unsqueeze(1), (integer + increment).flatten(0,1)], dim=1)
+        I[tuple(coords.T.tolist())] = values
         I = I / I.sum(dim=torch.arange(1,d+1).tolist(), keepdim=True)
     
     else:
@@ -57,12 +58,11 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     '''
     assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
     if dimension == 2:
-        quadrature = 1 / n_angle
-        SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle))) * quadrature
+        SHT = (torch.fft.fft(torch.eye(freq_cutoff, n_angle)))
     
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
-        quadrature = torch.sin(theta) / (n_angle**2)
+        quadrature = torch.sin(theta)
         SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * quadrature
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]
@@ -115,22 +115,17 @@ def get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_t
             theta = torch.arctan2(points[1], points[0])
             Fint = torch.stack([torch.exp( m * 1j * theta) for m in range(freq_cutoff)], dim=0)
             Fint = torch.einsum('rxy, mxy-> mrxy', tau_r, Fint)
-            
+
         elif d == 3:
-            theta = torch.acos(torch.clamp(points[2] / r, -1.0, 1.0))
+            theta = torch.nan_to_num(torch.acos(torch.clamp(points[2] / r, -1.0, 1.0)), nan=0.0)
             phi = torch.arctan2(points[1], points[0])
             Fint = []
             for l in range(freq_cutoff+1):
-                Y_lm_stack = []
-                for m in range(-l, l + 1):
-                    # Compute spherical harmonics using scipy
-                    Y_lm = torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)
-                    Y_lm_stack.append(torch.complex(torch.nan_to_num(Y_lm.real, nan=0.0),
-                                                    torch.nan_to_num(Y_lm.real, nan=0.0)))
-                Fint.append(torch.stack(Y_lm_stack, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
+                Y_l = [torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat) for m in range(-l, l + 1)]
+                Fint.append(torch.stack(Y_l, dim=0).reshape(-1, 1, *kernel_size)*tau_r)
         
     elif 0 <= interpolation_type and interpolation_type<=5 and type(interpolation_type) == int:
-        scalar = ((torch.arange(1, n_radius+1) /(n_radius+1) )**(d-1)) / (n_radius)
+        scalar = ((torch.arange(1, n_radius+1) / ((n_radius+1) * n_angle)) ** (d-1)) # / n_radius
         SHT = get_SHT_matrix(n_angle, freq_cutoff, d) # Spherical Harmonic Transform Matrix
         if d == 2:
             I = get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_type).type(torch.cfloat) # Interpolation Matrix
@@ -153,10 +148,10 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(d, freq_cutoff, n_angle)
     if d == 2:
-        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) / freq_cutoff
+        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint) # / freq_cutoff
 
     elif d == 3:
-        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) / (freq_cutoff+1)
+        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) # / (freq_cutoff + 1)
                   for l2 in range(freq_cutoff+1)], dim=2)
               for l in range(freq_cutoff_out+1)] for l1 in range(freq_cutoff_in+1)]
 

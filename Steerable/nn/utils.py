@@ -152,16 +152,12 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
     C = get_CG_matrix(d, freq_cutoff, n_angle)
     if d == 2:
         CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint)
-        if interpolation_type >= 0:
-            CFint = CFint / freq_cutoff
 
     elif d == 3:
         CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2])
                         for l2 in range(freq_cutoff+1)], dim=2)
                     for l in range(freq_cutoff_out+1)] 
                   for l1 in range(freq_cutoff_in+1)]
-        if interpolation_type >= 0:
-            CFint = [[C1 / (freq_cutoff + 1) for C1 in C2] for C2 in CFint]
 
     return CFint
 

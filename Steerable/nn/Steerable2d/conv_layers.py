@@ -1,5 +1,5 @@
 import torch
-from math import ceil
+from math import floor
 from Steerable.nn.utils import get_Fint_matrix, get_CFint_matrix, get_CG_matrix
 
 #######################################################################################################################
@@ -18,7 +18,7 @@ class _SE2Conv(torch.nn.Module):
         self.out_channels = out_channels
         self.kernel_size = kernel_size if type(kernel_size) is tuple else (kernel_size, kernel_size)
         self.freq_cutoff = freq_cutoff
-        self.n_radius = n_radius if n_radius else ceil(max(self.kernel_size) / 2)
+        self.n_radius = n_radius if n_radius else floor(max(self.kernel_size) / 2)
         self.n_angle = n_angle if n_angle else freq_cutoff
         self.dilation = dilation if type(dilation) is tuple else (dilation, dilation)
         self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding)

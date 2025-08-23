@@ -18,7 +18,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
     A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
-    r_values = torch.vstack([torch.arange(1, n_radius+1)*h/(n_radius) for h in R])
+    r_values = torch.vstack([torch.arange(1, n_radius+1)*h/(n_radius+1) for h in R])
     for i in range(d-1):
         A = A1 if i<d-2 else A2
         sphere_coord = torch.vstack([
@@ -151,12 +151,13 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
     Fint = get_Fint_matrix(kernel_size, n_radius, n_angle, freq_cutoff, interpolation_type)
     C = get_CG_matrix(d, freq_cutoff, n_angle)
     if d == 2:
-        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint)  / freq_cutoff
+        CFint = torch.einsum('lmn, nrxy -> lmrxy', torch.tensor(C, dtype=torch.cfloat), Fint)
 
     elif d == 3:
-        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2]) # / (freq_cutoff + 1)
-                  for l2 in range(freq_cutoff+1)], dim=2)
-              for l in range(freq_cutoff_out+1)] for l1 in range(freq_cutoff_in+1)]
+        CFint = [[torch.stack([torch.einsum('lmn, nrxyz -> lrmxyz', C[l][l1][l2].type(torch.cfloat), Fint[l2])
+                        for l2 in range(freq_cutoff+1)], dim=2)
+                    for l in range(freq_cutoff_out+1)] 
+                  for l1 in range(freq_cutoff_in+1)]
 
     return CFint
 

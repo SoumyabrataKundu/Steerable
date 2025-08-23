@@ -18,7 +18,7 @@ def get_interpolation_matrix(kernel_size, n_radius, n_angle, interpolation_order
     A1 = torch.pi * (torch.arange(n_angle)+0.5) / n_angle
     A2 = 2 * torch.pi * torch.arange(n_angle) / n_angle
     sphere_coord = torch.ones(1)
-    r_values = torch.vstack([torch.arange(1, n_radius+1)*h/n_radius for h in R])
+    r_values = torch.vstack([torch.arange(1, n_radius+1)*h/(n_radius+1) for h in R])
     for i in range(d-1):
         A = A1 if i<d-2 else A2
         sphere_coord = torch.vstack([

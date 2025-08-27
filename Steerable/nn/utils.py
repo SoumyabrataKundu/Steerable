@@ -65,7 +65,8 @@ def get_SHT_matrix(n_angle, freq_cutoff, dimension=2):
     
     if dimension == 3:
         theta, phi = torch.meshgrid(torch.pi * (torch.arange(n_angle)+0.5) / n_angle, 2 * torch.pi * torch.arange(n_angle) / n_angle, indexing='ij')
-        quadrature = torch.sin(theta)
+        factor = (2*torch.arange(n_angle//2) + 1)
+        quadrature = torch.sin(theta) * (torch.sin(factor*theta.unsqueeze(-1)) / factor).sum(dim=-1)
         SHT = [torch.stack([torch.from_numpy(sph_harm(m, l, phi.numpy(), theta.numpy())).type(torch.cfloat)*sqrt(4*torch.pi/(2*l+1)) * quadrature
                             for m in range(-l, l+1)], dim=0).flatten(1)
                for l in range(freq_cutoff + 1)]

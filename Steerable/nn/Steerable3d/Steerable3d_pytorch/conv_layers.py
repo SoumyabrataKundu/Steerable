@@ -1,13 +1,13 @@
-from math import ceil
+from math import floor
 
 import torch    
 from Steerable.nn.utils import get_CFint_matrix, merge_channel_dim, split_channel_dim
 
 gelib_installed = True
-#try:
-#    import gelib
-#except:
-#    gelib_installed = False
+try:
+    import gelib
+except:
+    gelib_installed = False
 
 ##################################################################################################################################
 ########################################################### First Layer ##########################################################
@@ -26,7 +26,7 @@ class SE3Conv(torch.nn.Module):
         self.padding = padding if type(padding) is tuple or type(padding) is str else (padding, padding, padding)
         self.stride = (stride, stride, stride) if type(stride) is not tuple else stride
 
-        self.n_radius = n_radius if n_radius else ceil(max(self.kernel_size) / 2)
+        self.n_radius = n_radius if n_radius else floor(max(self.kernel_size) / 2)
         self.n_angle = n_angle if n_angle else 2*(max(len(self.in_channels), len(self.out_channels)) + 1)
         
         

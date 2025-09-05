@@ -212,7 +212,7 @@ def get_pos_encod(kernel_size, freq_cutoff):
 ################################################### Rotate Image  #####################################################
 #######################################################################################################################
 
-def rotate_image(image, degree=None, order=5, batched=False):
+def rotate_image(image, degree=None, order=1, batched=False):
     assert 0 <= order <= 5, "'order' takes integer values between 0 and 5."
     dimension = image.ndim - 2 if batched else image.ndim - 1
     assert dimension in [2,3], "Only 2 and 3 dimensions are supported."

@@ -9,7 +9,7 @@ from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNo
 #######################################################################################################################
 
 class SE2MultiSelfAttention(torch.nn.Module):
-    def __init__(self, transformer_dim, n_head, max_m, dropout = 0.1, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, max_m, dropout = 0.0, add_pos_enc = True):
         super(SE2MultiSelfAttention, self).__init__()
 
         # Layer Design
@@ -138,7 +138,7 @@ class SE2TransformerEncoder(torch.nn.Module):
 ####################################################################################################################### 
 
 class SE2TransformerDecoder(torch.nn.Module):
-    def __init__(self, transformer_dim, n_head, max_m, n_classes, n_layers, dropout = 0.1, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, max_m, n_classes, n_layers, dropout = 0.0, add_pos_enc = True):
         super(SE2TransformerDecoder, self).__init__()
 
         self.transformer_dim = transformer_dim

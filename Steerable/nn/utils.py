@@ -176,37 +176,31 @@ def get_CFint_matrix(kernel_size, n_radius, n_angle, freq_cutoff_in, freq_cutoff
 ###########################################################################################################################
 
 def get_pos_encod(kernel_size, freq_cutoff):    
-    # Compute Pairwise differences
     d = len(kernel_size)
     points = torch.stack(torch.meshgrid(*[torch.arange(0, kernel_size[i], 1) for i in range(d)], indexing='ij'), dim=0).flatten(1)
-    
     num_points = points.shape[-1]
     pairwise_diffs = points.unsqueeze(-1) - points.unsqueeze(1)
     pairwise_diffs = pairwise_diffs.view(d, -1)  
     r_square = torch.sum(pairwise_diffs**2, dim=0)
+    tau = 1
+    phi_r = torch.exp(-r_square / (2*tau))
+    phi_r[r_square==0] = 0
     
-    if d == 2:
-        phi_r = torch.stack([torch.exp(-(r_square).reshape(num_points, num_points) / 2).fill_diagonal_(0) for m in range(freq_cutoff)], dim=0)
+    if d == 2: 
         theta = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
-        result = torch.stack([torch.exp( m *1j * theta) for m in range(freq_cutoff)], dim = 0)
-        result = result.reshape(freq_cutoff, num_points, num_points) * phi_r
-        result = result.reshape(freq_cutoff, 1, num_points, 1, num_points)
+        pos_enc = torch.stack([torch.exp(-m *1j * theta) for m in range(freq_cutoff)], dim = 0) * phi_r
+        pos_enc = pos_enc.reshape(freq_cutoff, 1, num_points, 1, num_points)
         
     elif d == 3:
-        theta = torch.arccos(torch.clamp(pairwise_diffs[2] / torch.sqrt(r_square), -1.0, 1.0))
+        theta = torch.nan_to_num(torch.arccos(torch.clamp(pairwise_diffs[2] / torch.sqrt(r_square), -1.0, 1.0)), nan=0.0)
         phi = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
-        phi_r = [torch.exp(-(r_square - l)) for l in range(freq_cutoff+1)]
-        
-        result = []
+        pos_enc = []
         for l in range(freq_cutoff+1):
-            part = torch.cat([(sph_harm(m, l, phi, theta) * phi_r[l]).unsqueeze(-1) for m in range(-l, l+1)], dim=-1)
+            part = torch.stack([sph_harm(m, l, phi, theta) * phi_r for m in range(-l, l+1)], dim=-1)
             part = part.reshape(num_points, num_points, 2*l+1).transpose(-2,-1).unsqueeze(-2)
-            part = torch.nan_to_num(part.real, nan=0.0) + 1j * torch.nan_to_num(part.imag, nan=0.0)
-            part = part.type(torch.cfloat)
-
-            result.append(torch.conj(part))
-
-    return result
+            pos_enc.append(part.type(torch.cfloat))
+            
+    return pos_enc
 
 #######################################################################################################################
 ################################################### Rotate Image  #####################################################

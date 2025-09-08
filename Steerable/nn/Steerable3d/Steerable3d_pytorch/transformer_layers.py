@@ -152,11 +152,12 @@ class SE3TransformerDecoder(torch.nn.Module):
         )
 
         self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim[0], n_classes, dtype=torch.cfloat))
+        self.add_pos_enc = add_pos_enc
         self.pos_encod = None
         self.norm = SE3BatchNorm()
         
     def forward(self, x):
-        if self.pos_encod == None:
+        if self.add_pos_enc and self.pos_encod == None:
             pos = get_pos_encod(x[0].shape[-3:], self.maxl)
             pos = [part.to(x[0].device) for part in pos]
             self.pos_encod = [torch.zeros(part.shape[0]+self.n_classes, part.shape[1], 1, part.shape[3]+self.n_classes, 

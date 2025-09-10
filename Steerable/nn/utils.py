@@ -1,6 +1,5 @@
 from math import sqrt
 from scipy.ndimage import map_coordinates
-from scipy.ndimage.interpolation import rotate
 from scipy.special import sph_harm
 from sympy.physics.quantum.cg import CG
 
@@ -201,37 +200,6 @@ def get_pos_encod(kernel_size, freq_cutoff):
             pos_enc.append(part.type(torch.cfloat))
             
     return pos_enc
-
-#######################################################################################################################
-################################################### Rotate Image  #####################################################
-#######################################################################################################################
-
-def rotate_image(image, degree=None, order=1, batched=False):
-    assert 0 <= order <= 5, "'order' takes integer values between 0 and 5."
-    dimension = image.ndim - 2 if batched else image.ndim - 1
-    assert dimension in [2,3], "Only 2 and 3 dimensions are supported."
-    if degree is None:
-        if dimension == 2:
-            degree = torch.randint(0, 360, (1,)).item()
-        elif dimension == 3:
-            degree = torch.randint(0, 360, (3,))
-    
-    def rotate_slice_image(image_slice, degree):
-        if image_slice.ndim == 2:
-            image_slice = torch.from_numpy(rotate(image_slice, degree, (1,0), reshape=False, order=order))
-        elif image_slice.ndim == 3:
-            image_slice = torch.from_numpy(rotate(image_slice, degree[0], (1,0), reshape=False, order=order))
-            image_slice = torch.from_numpy(rotate(image_slice, degree[1], (0,2), reshape=False, order=order))
-            image_slice = torch.from_numpy(rotate(image_slice, degree[2], (1,0), reshape=False, order=order))
-        
-        return image_slice
-
-    image_shape = image.shape
-    image = image.reshape(-1, *image_shape[-dimension:])
-    
-    image = torch.vstack([rotate_slice_image(image[i], degree) for i in range(image.shape[0])]).view(*image_shape)
-    
-    return image
 
 #########################################################################################################################
 ####################################### Merge and Split Channels (3D) ###################################################

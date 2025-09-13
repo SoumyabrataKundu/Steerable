@@ -68,7 +68,7 @@ class SE2MultiSelfAttention(torch.nn.Module):
 #######################################################################################################################    
 
 class SE2PositionwiseFeedforward(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, freq_cutoff, dropout = 0.1):
+    def __init__(self, input_dim, hidden_dim, freq_cutoff, dropout = 0.0):
         super(SE2PositionwiseFeedforward, self).__init__()
 
         self.freq_cutoff = freq_cutoff

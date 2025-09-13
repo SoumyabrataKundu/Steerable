@@ -181,9 +181,9 @@ def get_pos_encod(kernel_size, freq_cutoff):
     pairwise_diffs = points.unsqueeze(-1) - points.unsqueeze(1)
     pairwise_diffs = pairwise_diffs.view(d, -1)  
     r_square = torch.sum(pairwise_diffs**2, dim=0)
-    tau = 1
-    phi_r = torch.exp(-r_square / (2*tau))
-    phi_r[r_square==0] = 0
+    phi_r = -r_square.clone().float()
+    phi_r[r_square==0] = -float('inf')
+    phi_r = torch.softmax(phi_r, dim=0)
     
     if d == 2: 
         theta = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])

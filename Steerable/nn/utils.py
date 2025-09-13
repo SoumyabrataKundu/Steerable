@@ -181,10 +181,13 @@ def get_pos_encod(kernel_size, freq_cutoff):
     pairwise_diffs = points.unsqueeze(-1) - points.unsqueeze(1)
     pairwise_diffs = pairwise_diffs.view(d, -1)  
     r_square = torch.sum(pairwise_diffs**2, dim=0)
-    phi_r = -r_square.clone().float()
-    phi_r[r_square==0] = -float('inf')
+    phi_r, indices = (-r_square).float().unique(return_inverse=True)
+    phi_r = phi_r / (max(kernel_size)**2)
+    phi_r[phi_r==0] = -float('inf')
     phi_r = torch.softmax(phi_r, dim=0)
-    
+    phi_r = phi_r[indices]
+
+
     if d == 2: 
         theta = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
         pos_enc = torch.stack([torch.exp(-m *1j * theta) for m in range(freq_cutoff)], dim = 0) * phi_r

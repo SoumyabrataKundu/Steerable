@@ -181,15 +181,11 @@ def get_pos_encod(kernel_size, freq_cutoff):
     pairwise_diffs = points.unsqueeze(-1) - points.unsqueeze(1)
     pairwise_diffs = pairwise_diffs.view(d, -1)  
     r_square = torch.sum(pairwise_diffs**2, dim=0)
-    phi_r, indices = (-r_square).float().unique(return_inverse=True)
-    phi_r[phi_r==0] = -float('inf')
-    phi_r = torch.softmax(phi_r, dim=0)
-    phi_r = phi_r[indices]
-
+    _ , indices = r_square.reshape(num_points, num_points).unique(return_inverse=True)
 
     if d == 2: 
         theta = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
-        pos_enc = torch.stack([torch.exp(-m *1j * theta) for m in range(freq_cutoff)], dim = 0) * phi_r
+        pos_enc = torch.stack([torch.exp(-m *1j * theta) for m in range(freq_cutoff)], dim = 0)
         pos_enc = pos_enc.reshape(freq_cutoff, 1, num_points, 1, num_points)
         
     elif d == 3:
@@ -197,22 +193,11 @@ def get_pos_encod(kernel_size, freq_cutoff):
         phi = torch.arctan2(pairwise_diffs[1], pairwise_diffs[0])
         pos_enc = []
         for l in range(freq_cutoff+1):
-            part = torch.stack([sph_harm(m, l, phi, theta) * phi_r for m in range(-l, l+1)], dim=-1)
+            part = torch.stack([sph_harm(m, l, phi, theta) for m in range(-l, l+1)], dim=-1)
             part = part.reshape(num_points, num_points, 2*l+1).transpose(-2,-1).unsqueeze(-2)
             pos_enc.append(part.type(torch.cfloat))
             
-    return pos_enc
-
-def complex_softmax(z: torch.Tensor, dim: int = -1, eps: float = 1e-12):
-    """
-    Complex-valued softmax variants.
-    """
-    shift = z.real.amax(dim=dim, keepdim=True)
-    exps = torch.exp(z - shift)
-    denom = exps.sum(dim=dim, keepdim=True)
-    return exps / (denom + eps)
-
-
+    return pos_enc, indices
 
 #########################################################################################################################
 ####################################### Merge and Split Channels (3D) ###################################################

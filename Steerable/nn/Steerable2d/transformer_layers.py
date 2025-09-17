@@ -8,7 +8,7 @@ from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNo
 ############################################## Multihead Self Attention ###############################################
 #######################################################################################################################
 
-class SE2MultiSelfAttention(torch.nn.Module):
+class SE2MultiSelfAttention(torch.nn.modules.lazy.LazyModuleMixin, torch.nn.Module):
     def __init__(self, transformer_dim, n_head, freq_cutoff, dropout = 0.0, add_pos_enc = True):
         super(SE2MultiSelfAttention, self).__init__()
 
@@ -23,10 +23,26 @@ class SE2MultiSelfAttention(torch.nn.Module):
 
         # Layer Parameters
         self.embeddings = torch.nn.Parameter(torch.randn(3, 1, freq_cutoff, n_head, self.query_dim, transformer_dim, dtype = torch.cfloat))
-        self.encoding = torch.nn.Parameter(torch.randn(2, self.freq_cutoff, n_head, 1, self.query_dim, 1, dtype = torch.cfloat))
         self.out = torch.nn.Parameter(torch.randn(freq_cutoff, transformer_dim, n_head * self.query_dim, dtype = torch.cfloat))
 
-        self.pos_enc = None
+        if self.add_pos_enc:
+            self.register_parameter('pos_enc_weights', torch.nn.parameter.UninitializedParameter(requires_grad=True, dtype=torch.cfloat))
+        self.pos_enc_basis = None
+        self.radii_indices = None
+        
+    def initialize_parameters(self, x):
+        with torch.no_grad():
+            x_shape = x.shape
+            x = x.flatten(3) # shape : batch x freq_cutoff x channel x N
+            if self.add_pos_enc:
+                if self.pos_enc_basis is  None or self.radii_indices is None:
+                    self.pos_enc_basis, self.radii_indices = get_pos_encod(x_shape[-2:], self.freq_cutoff)
+                if isinstance(self.pos_enc_weights, torch.nn.parameter.UninitializedParameter):
+                    self.pos_enc_weights.materialize((2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max()), dtype = torch.cfloat, device=x.device)
+                    self.pos_enc_weights.copy_(torch.randn(2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max(), dtype=torch.cfloat, device=x.device))
+                self.pos_weights = torch.cat([torch.zeros(2, self.freq_cutoff, self.n_head, self.query_dim, 1, dtype = torch.cfloat, device=x.device),
+                    self.pos_enc_weights],dim=-1)
+                
 
     def forward(self, x):
         x_shape = x.shape
@@ -38,13 +54,8 @@ class SE2MultiSelfAttention(torch.nn.Module):
         
         # Scores
         A = Q @ K
-                
-        # Positional Encoding
         if self.add_pos_enc:
-            if self.pos_enc ==  None:
-                self.pos_enc = get_pos_encod(x_shape[-2:], self.freq_cutoff).to(Q.device)
-                
-            pos = (self.encoding * self.pos_enc)
+            pos = self.pos_weights[..., self.radii_indices].transpose(-3,-2) * self.pos_enc_basis.to(x.device)
             A = A + (Q.unsqueeze(-2) @ pos[0]).squeeze(-2)
         
         # Attention Weights
@@ -143,6 +154,7 @@ class SE2TransformerDecoder(torch.nn.Module):
 
         self.transformer_dim = transformer_dim
         self.scale = transformer_dim ** -0.5
+        self.n_head = n_head
         self.n_classes = n_classes
         self.freq_cutoff = freq_cutoff
         
@@ -154,15 +166,19 @@ class SE2TransformerDecoder(torch.nn.Module):
         self.C = torch.tensor([[[(m1+m2-m)%freq_cutoff == 0 for m2 in range(freq_cutoff)]
                            for m1 in range(freq_cutoff)] for m in range(freq_cutoff)]).type(torch.cfloat)
         self.add_pos_enc = add_pos_enc
-        self.pos_enc = None
+        self.pos_enc_basis = None
+        self.radii_indices = None
     def forward(self, x):
         # Positional Encoding
-        if self.add_pos_enc and self.pos_enc == None:
-            pos = get_pos_encod(x.shape[-2:], self.freq_cutoff).to(x.device)
-            self.pos_enc = torch.zeros(self.freq_cutoff, 1, pos.shape[2]+self.n_classes, 1, pos.shape[4]+self.n_classes, dtype=torch.cfloat, device=x.device)
-            self.pos_enc[:,:,:pos.shape[2],:,:pos.shape[4]] = pos
+        if self.add_pos_enc and (self.pos_enc_basis == None or self.radii_indices == None):
+            pos_enc_basis, radii_indices = get_pos_encod(x.shape[-2:], self.freq_cutoff)
+            self.pos_enc_basis = torch.zeros(self.freq_cutoff, 1, pos_enc_basis.shape[2]+self.n_classes, 1, pos_enc_basis.shape[4]+self.n_classes, dtype=torch.cfloat, device=x.device)
+            self.pos_enc_basis[:,:,:pos_enc_basis.shape[2],:,:pos_enc_basis.shape[4]] = pos_enc_basis.to(x.device)
+            self.radii_indices = torch.zeros(pos_enc_basis.shape[2]+self.n_classes, pos_enc_basis.shape[4]+self.n_classes, dtype=radii_indices.dtype, device=x.device)
+            self.radii_indices[:radii_indices.shape[0],:radii_indices.shape[1]] = radii_indices.to(x.device)
             for module in self.transformer_encoder:
-                module.multihead_attention.pos_enc = self.pos_enc
+                module.multihead_attention.pos_enc_basis = self.pos_enc_basis
+                module.multihead_attention.radii_indices = self.radii_indices
         
         # Transformer
         x_shape = x.shape

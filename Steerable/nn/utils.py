@@ -182,7 +182,6 @@ def get_pos_encod(kernel_size, freq_cutoff):
     pairwise_diffs = pairwise_diffs.view(d, -1)  
     r_square = torch.sum(pairwise_diffs**2, dim=0)
     phi_r, indices = (-r_square).float().unique(return_inverse=True)
-    phi_r = phi_r / (max(kernel_size)**2)
     phi_r[phi_r==0] = -float('inf')
     phi_r = torch.softmax(phi_r, dim=0)
     phi_r = phi_r[indices]
@@ -203,6 +202,17 @@ def get_pos_encod(kernel_size, freq_cutoff):
             pos_enc.append(part.type(torch.cfloat))
             
     return pos_enc
+
+def complex_softmax(z: torch.Tensor, dim: int = -1, eps: float = 1e-12):
+    """
+    Complex-valued softmax variants.
+    """
+    shift = z.real.amax(dim=dim, keepdim=True)
+    exps = torch.exp(z - shift)
+    denom = exps.sum(dim=dim, keepdim=True)
+    return exps / (denom + eps)
+
+
 
 #########################################################################################################################
 ####################################### Merge and Split Channels (3D) ###################################################

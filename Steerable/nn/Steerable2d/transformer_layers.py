@@ -2,14 +2,14 @@ import torch
 from math import sqrt
 
 from Steerable.nn.utils import get_pos_encod
-from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNorm, ComplexDropout
+from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNorm
         
 #######################################################################################################################
 ############################################## Multihead Self Attention ###############################################
 #######################################################################################################################
 
 class SE2MultiSelfAttention(torch.nn.Module):
-    def __init__(self, transformer_dim, n_head, freq_cutoff, dropout = 0.0, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, freq_cutoff, add_pos_enc = True):
         super(SE2MultiSelfAttention, self).__init__()
 
         # Layer Design
@@ -19,7 +19,6 @@ class SE2MultiSelfAttention(torch.nn.Module):
         self.n_head = n_head
         self.freq_cutoff = freq_cutoff
         self.add_pos_enc = add_pos_enc
-        self.dropout = ComplexDropout(p = dropout)
 
         # Layer Parameters
         self.embeddings = torch.nn.Parameter(torch.randn(3, 1, freq_cutoff, n_head, self.query_dim, transformer_dim, dtype = torch.cfloat))
@@ -33,6 +32,7 @@ class SE2MultiSelfAttention(torch.nn.Module):
         with torch.no_grad():
             if self.pos_enc_basis is  None or self.radii_indices is None:
                     self.pos_enc_basis, self.radii_indices = get_pos_encod(shape, freq_cutoff)
+                    self.pos_enc_basis = self.pos_enc_basis.to(device)
             if self.pos_enc_weights is None:
                     self.pos_enc_weights = torch.nn.Parameter(torch.randn(2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max(), dtype=torch.cfloat, device=device))
                     
@@ -53,13 +53,12 @@ class SE2MultiSelfAttention(torch.nn.Module):
         A = Q @ K
         if self.add_pos_enc:
             self.initialize_parameters(x_shape[-2:],self.freq_cutoff, x.device)
-            pos = self.pos_weights[..., self.radii_indices].transpose(-3,-2) * self.pos_enc_basis.to(x.device)
+            pos = self.pos_weights[..., self.radii_indices].transpose(-3,-2) * self.pos_enc_basis
             A = A + (Q.unsqueeze(-2) @ pos[0]).squeeze(-2)
         
         # Attention Weights
         A = torch.sum(A, dim=1, keepdim=True)
         A = torch.nn.functional.softmax(A.abs() / sqrt(self.query_dim), dim = -1).type(torch.cfloat)
-        A = self.dropout(A)
  
         # Output
         result = V @ A.transpose(-2,-1)
@@ -77,15 +76,13 @@ class SE2MultiSelfAttention(torch.nn.Module):
 #######################################################################################################################    
 
 class SE2PositionwiseFeedforward(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, freq_cutoff, dropout = 0.0):
+    def __init__(self, input_dim, hidden_dim, freq_cutoff):
         super(SE2PositionwiseFeedforward, self).__init__()
 
         self.freq_cutoff = freq_cutoff
 
         self.weights1 = torch.nn.Parameter(torch.randn(freq_cutoff, hidden_dim, input_dim, dtype = torch.cfloat))
         self.weights2 = torch.nn.Parameter(torch.randn(freq_cutoff, input_dim, hidden_dim, dtype = torch.cfloat))
-        self.dropout1 = ComplexDropout(p = dropout)
-        self.dropout2 = ComplexDropout(p = dropout)
         
         self.eps = 1e-5
         self.nonlinearity = SE2NormNonLinearity(hidden_dim, freq_cutoff, nonlinearity=torch.nn.GELU())
@@ -96,9 +93,7 @@ class SE2PositionwiseFeedforward(torch.nn.Module):
 
         x = self.weights1 @ x
         x = self.nonlinearity(x)
-        x = self.dropout1(x)
         x = self.weights2 @ x
-        x = self.dropout2(x)
         
         x = x.reshape(*x_shape)
         return x   
@@ -108,12 +103,12 @@ class SE2PositionwiseFeedforward(torch.nn.Module):
 ####################################################################################################################### 
 
 class SE2Transformer(torch.nn.Module):
-    def __init__(self, transformer_dim, n_head, hidden_dim, freq_cutoff, dropout = 0.0, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, hidden_dim, freq_cutoff, add_pos_enc = True):
         super(SE2Transformer, self).__init__()
 
         # Layer Design
-        self.multihead_attention = SE2MultiSelfAttention(transformer_dim, n_head, freq_cutoff, dropout, add_pos_enc)
-        self.positionwise_feedforward = SE2PositionwiseFeedforward(transformer_dim, hidden_dim, freq_cutoff, dropout)
+        self.multihead_attention = SE2MultiSelfAttention(transformer_dim, n_head, freq_cutoff, add_pos_enc)
+        self.positionwise_feedforward = SE2PositionwiseFeedforward(transformer_dim, hidden_dim, freq_cutoff)
 
         self.layer_norm1 = SE2BatchNorm()
         self.layer_norm2 = SE2BatchNorm()
@@ -129,12 +124,12 @@ class SE2Transformer(torch.nn.Module):
 ####################################################################################################################### 
 
 class SE2TransformerEncoder(torch.nn.Module):
-    def __init__(self, transformer_dim, n_head, freq_cutoff, n_layers = 1, dropout = 0.0, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, freq_cutoff, n_layers = 1, add_pos_enc = True):
         super(SE2TransformerEncoder, self).__init__()
 
         # Layer Design
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, freq_cutoff, dropout, add_pos_enc) for _ in range(n_layers)]
+            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, freq_cutoff, add_pos_enc) for _ in range(n_layers)]
         )
         self.norm = SE2BatchNorm()
 
@@ -147,7 +142,7 @@ class SE2TransformerEncoder(torch.nn.Module):
 ####################################################################################################################### 
 
 class SE2TransformerDecoder(torch.nn.Module):
-    def __init__(self, transformer_dim, n_head, freq_cutoff, n_classes, n_layers, dropout = 0.0, add_pos_enc = True):
+    def __init__(self, transformer_dim, n_head, freq_cutoff, n_classes, n_layers, add_pos_enc = True):
         super(SE2TransformerDecoder, self).__init__()
 
         self.transformer_dim = transformer_dim
@@ -157,7 +152,7 @@ class SE2TransformerDecoder(torch.nn.Module):
         self.freq_cutoff = freq_cutoff
         
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, freq_cutoff, dropout, add_pos_enc) for _ in range(n_layers)]
+            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, freq_cutoff, add_pos_enc) for _ in range(n_layers)]
         )
 
         self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))
@@ -172,7 +167,7 @@ class SE2TransformerDecoder(torch.nn.Module):
             pos_enc_basis, radii_indices = get_pos_encod(x.shape[-2:], self.freq_cutoff)
             self.pos_enc_basis = torch.zeros(self.freq_cutoff, 1, pos_enc_basis.shape[2]+self.n_classes, 1, pos_enc_basis.shape[4]+self.n_classes, dtype=torch.cfloat, device=x.device)
             self.pos_enc_basis[:,:,:pos_enc_basis.shape[2],:,:pos_enc_basis.shape[4]] = pos_enc_basis.to(x.device)
-            self.radii_indices = torch.zeros(pos_enc_basis.shape[2]+self.n_classes, pos_enc_basis.shape[4]+self.n_classes, dtype=radii_indices.dtype, device=x.device)
+            self.radii_indices = torch.zeros(radii_indices.shape[0]+self.n_classes, radii_indices.shape[1]+self.n_classes, dtype=radii_indices.dtype, device=x.device)
             self.radii_indices[:radii_indices.shape[0],:radii_indices.shape[1]] = radii_indices.to(x.device)
             for module in self.transformer_encoder:
                 module.multihead_attention.pos_enc_basis = self.pos_enc_basis

@@ -167,7 +167,7 @@ class SE2AvgPool(torch.nn.Module):
 
 
 #######################################################################################################################
-################################################### Invariant Layers ##################################################
+################################################### FLattening Layer ##################################################
 #######################################################################################################################
 
 class SE2NormFlatten(torch.nn.Module):
@@ -187,30 +187,3 @@ class SE2Pooling(torch.nn.Module):
         x = torch.mean(x.flatten(3), dim = (3,))
         x = torch.max(x.abs(), dim = 1)[0]
         return x
-
-#######################################################################################################################
-################################################### Complex Dropout ###################################################
-#######################################################################################################################
-
-class ComplexDropout(torch.nn.Module):
-    def __init__(self, p: float = 0.1, inplace: bool = False):
-        super().__init__()
-        if not 0 <= p < 1:
-            raise ValueError(f"dropout probability has to be in [0,1), got {p}")
-        self.p = p
-        self.inplace = inplace
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if not self.training or self.p == 0:
-            return x
-
-        if not torch.is_complex(x):
-            return torch.nn.functional.dropout(x, self.p, training=True, inplace=self.inplace)
-
-        mask = (torch.rand_like(x.real) > self.p).to(x.dtype) / (1 - self.p)
-        if self.inplace:
-            return x.mul_(mask)
-        return x * mask
-
-    def extra_repr(self):
-        return f"p={self.p}, inplace={self.inplace}"

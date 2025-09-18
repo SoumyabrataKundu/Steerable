@@ -26,29 +26,43 @@ class SE3MultiSelfAttention(torch.nn.Module):
         self.embeddings = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(3, 1, 1, dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
-        self.encoding = torch.nn.ParameterList([torch.nn.Parameter(
-                                        torch.randn(2, n_head, 1, 1, dim, 1, dtype = torch.cfloat))
-                                        for dim in self.query_dim])
         self.out = torch.nn.ParameterList([torch.nn.Parameter(
                                         torch.randn(dim, dim, dtype = torch.cfloat))
                                         for dim in self.transformer_dim])
-        self.pos_encod = None
+        self.pos_enc_weights = None
+        self.pos_enc_basis = None
+        self.radii_indices = None
 
+    def intialize_positional_encoding(self, shape, maxl, device):
+        with torch.no_grad():
+            if self.pos_enc_basis is None and self.add_pos_enc:
+                self.pos_enc_basis, self.radii_indices = get_pos_encod(shape, maxl)
+                self.pos_enc_basis = [part.to(device) for part in self.pos_enc_basis]
+            if self.pos_enc_weights is None:
+                self.pos_enc_weights = torch.nn.ParameterList([torch.nn.Parameter(
+                                        torch.randn(2, self.n_head, 1, dim, self.radii_indices.max(), 
+                                                    dtype = torch.cfloat, device=device))
+                                        for dim in self.query_dim])
+                
+            self.pos_weights = [torch.cat([
+                    torch.zeros(2, self.n_head, 1, dim, 1, dtype = torch.cfloat, device=device),
+                    self.pos_enc_weights[l]], dim=-1)
+                    for l, dim in enumerate(self.query_dim)]
+            
     def forward(self, x):
         x_shape = x[0].shape
-        
-        if self.pos_encod is None and self.add_pos_enc:
-            self.pos_encod = get_pos_encod(x_shape[-3:], self.maxl)
-            self.pos_encod = [part.to(x[0].device) for part in self.pos_encod]
 
         # Query Key Pair
         E, P = [], []
+        if self.add_pos_enc:
+            self.intialize_positional_encoding(x_shape[-3:], self.maxl, x[0].device)
+        
         for l in range(self.maxl+1):
             # Embeddings
             E.append((self.embeddings[l] @ x[l].flatten(3)).reshape(3, x_shape[0], (2*l+1), self.n_head, self.query_dim[l], -1).transpose(2,3).flatten(3,4))
             # Attention Scores
             if self.add_pos_enc:
-                P.append((self.encoding[l] * self.pos_encod[l]).flatten(3,4))
+                P.append((self.pos_weights[l][..., self.radii_indices].movedim(-2, 2) * self.pos_enc_basis[l]).flatten(3,4))
         
         QKV = torch.cat(E, dim=3)
         Q, K, V = torch.conj(QKV[0].transpose(-2,-1)), QKV[1], QKV[2]
@@ -153,19 +167,23 @@ class SE3TransformerDecoder(torch.nn.Module):
 
         self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim[0], n_classes, dtype=torch.cfloat))
         self.add_pos_enc = add_pos_enc
-        self.pos_encod = None
+        self.pos_enc_basis = None
+        self.radii_indices = None
         self.norm = SE3BatchNorm()
         
     def forward(self, x):
-        if self.add_pos_enc and self.pos_encod == None:
-            pos = get_pos_encod(x[0].shape[-3:], self.maxl)
-            pos = [part.to(x[0].device) for part in pos]
-            self.pos_encod = [torch.zeros(part.shape[0]+self.n_classes, part.shape[1], 1, part.shape[3]+self.n_classes, 
-                                          dtype=torch.cfloat, device=x[0].device) for part in pos]
-            for l in range(len(pos)):
-                self.pos_encod[l][:pos[l].shape[0], :,:,:pos[l].shape[3]] = pos[l]
+        if self.add_pos_enc and self.pos_enc_basis is None:
+            pos_enc_basis, radii_indices = get_pos_encod(x[0].shape[-3:], self.maxl)
+            pos_enc_basis = [part.to(x[0].device) for part in pos_enc_basis]
+            self.pos_enc_basis = [torch.zeros(part.shape[0]+self.n_classes, part.shape[1], 1, part.shape[3]+self.n_classes, 
+                                          dtype=torch.cfloat, device=x[0].device) for part in pos_enc_basis]
+            self.radii_indices = torch.zeros(radii_indices.shape[0]+self.n_classes, radii_indices.shape[1]+self.n_classes, dtype=radii_indices.dtype, device=x[0].device)
+            self.radii_indices[:radii_indices.shape[0],:radii_indices.shape[1]] = radii_indices.to(x[0].device)
+            for l in range(len(pos_enc_basis)):
+                self.pos_enc_basis[l][:pos_enc_basis[l].shape[0], :,:,:pos_enc_basis[l].shape[3]] = pos_enc_basis[l]
             for module in self.transformer_encoder:
-                module.multihead_attention.pos_encod = self.pos_encod
+                module.multihead_attention.pos_enc_basis = self.pos_enc_basis
+                module.multihead_attention.radii_indices = self.radii_indices
 
         result = []
         x_shape = x[0].shape

@@ -8,7 +8,7 @@ from Steerable.nn.Steerable2d.conv_layers import SE2NormNonLinearity, SE2BatchNo
 ############################################## Multihead Self Attention ###############################################
 #######################################################################################################################
 
-class SE2MultiSelfAttention(torch.nn.modules.lazy.LazyModuleMixin, torch.nn.Module):
+class SE2MultiSelfAttention(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, freq_cutoff, dropout = 0.0, add_pos_enc = True):
         super(SE2MultiSelfAttention, self).__init__()
 
@@ -30,17 +30,14 @@ class SE2MultiSelfAttention(torch.nn.modules.lazy.LazyModuleMixin, torch.nn.Modu
         self.pos_enc_basis = None
         self.radii_indices = None
         
-    def initialize_parameters(self, x):
+    def initialize_parameters(self, shape, freq_cutoff, device):
         with torch.no_grad():
-            x_shape = x.shape
-            x = x.flatten(3) # shape : batch x freq_cutoff x channel x N
-            if self.add_pos_enc:
-                if self.pos_enc_basis is  None or self.radii_indices is None:
-                    self.pos_enc_basis, self.radii_indices = get_pos_encod(x_shape[-2:], self.freq_cutoff)
-                if isinstance(self.pos_enc_weights, torch.nn.parameter.UninitializedParameter):
-                    self.pos_enc_weights.materialize((2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max()), dtype = torch.cfloat, device=x.device)
-                    self.pos_enc_weights.copy_(torch.randn(2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max(), dtype=torch.cfloat, device=x.device))
-                self.pos_weights = torch.cat([torch.zeros(2, self.freq_cutoff, self.n_head, self.query_dim, 1, dtype = torch.cfloat, device=x.device),
+            if self.pos_enc_basis is  None or self.radii_indices is None:
+                    self.pos_enc_basis, self.radii_indices = get_pos_encod(shape, freq_cutoff)
+            if isinstance(self.pos_enc_weights, torch.nn.parameter.UninitializedParameter):
+                    self.pos_enc_weights.materialize((2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max()), dtype = torch.cfloat, device=device)
+                    self.pos_enc_weights.copy_(torch.randn(2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max(), dtype=torch.cfloat, device=device))
+            self.pos_weights = torch.cat([torch.zeros(2, self.freq_cutoff, self.n_head, self.query_dim, 1, dtype = torch.cfloat, device=device),
                     self.pos_enc_weights],dim=-1)
                 
 
@@ -55,6 +52,7 @@ class SE2MultiSelfAttention(torch.nn.modules.lazy.LazyModuleMixin, torch.nn.Modu
         # Scores
         A = Q @ K
         if self.add_pos_enc:
+            self.initialize_parameters(x_shape[-2:],self.freq_cutoff, x.device)
             pos = self.pos_weights[..., self.radii_indices].transpose(-3,-2) * self.pos_enc_basis.to(x.device)
             A = A + (Q.unsqueeze(-2) @ pos[0]).squeeze(-2)
         

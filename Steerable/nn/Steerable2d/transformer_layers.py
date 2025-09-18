@@ -25,8 +25,7 @@ class SE2MultiSelfAttention(torch.nn.Module):
         self.embeddings = torch.nn.Parameter(torch.randn(3, 1, freq_cutoff, n_head, self.query_dim, transformer_dim, dtype = torch.cfloat))
         self.out = torch.nn.Parameter(torch.randn(freq_cutoff, transformer_dim, n_head * self.query_dim, dtype = torch.cfloat))
 
-        if self.add_pos_enc:
-            self.register_parameter('pos_enc_weights', torch.nn.parameter.UninitializedParameter(requires_grad=True, dtype=torch.cfloat))
+        self.pos_enc_weights = None
         self.pos_enc_basis = None
         self.radii_indices = None
         
@@ -34,11 +33,12 @@ class SE2MultiSelfAttention(torch.nn.Module):
         with torch.no_grad():
             if self.pos_enc_basis is  None or self.radii_indices is None:
                     self.pos_enc_basis, self.radii_indices = get_pos_encod(shape, freq_cutoff)
-            if isinstance(self.pos_enc_weights, torch.nn.parameter.UninitializedParameter):
-                    self.pos_enc_weights.materialize((2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max()), dtype = torch.cfloat, device=device)
-                    self.pos_enc_weights.copy_(torch.randn(2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max(), dtype=torch.cfloat, device=device))
-            self.pos_weights = torch.cat([torch.zeros(2, self.freq_cutoff, self.n_head, self.query_dim, 1, dtype = torch.cfloat, device=device),
+            if self.pos_enc_weights is None:
+                    self.pos_enc_weights = torch.nn.Parameter(torch.randn(2, self.freq_cutoff, self.n_head, self.query_dim, self.radii_indices.max(), dtype=torch.cfloat, device=device))
+                    
+        self.pos_weights = torch.cat([torch.zeros(2, self.freq_cutoff, self.n_head, self.query_dim, 1, dtype = torch.cfloat, device=device),
                     self.pos_enc_weights],dim=-1)
+            
                 
 
     def forward(self, x):

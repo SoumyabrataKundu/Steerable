@@ -27,7 +27,6 @@ def display_segmentation_map_2d(target_data, num_classes=None, fig = None, ax=No
             plt.colorbar(boundaries=torch.arange(0, num_classes-1), ticks=torch.arange(0, num_classes-1))
         
     else:
-        ax.axis('off')
         cax = ax.imshow(target_data - 1, cmap=cmap, norm=norm)
         if colorbar:
             divider = make_axes_locatable(ax)

@@ -179,7 +179,7 @@ def get_pos_encod(kernel_size, freq_cutoff):
     points = torch.stack(torch.meshgrid(*[torch.arange(0, kernel_size[i], 1) for i in range(d)], indexing='ij'), dim=0).flatten(1)
     num_points = points.shape[-1]
     pairwise_diffs = points.unsqueeze(-1) - points.unsqueeze(1)
-    pairwise_diffs = pairwise_diffs.view(d, -1)  
+    pairwise_diffs = pairwise_diffs.view(d, -1)
     r_square = torch.sum(pairwise_diffs**2, dim=0)
     _ , indices = r_square.reshape(num_points, num_points).unique(return_inverse=True)
 

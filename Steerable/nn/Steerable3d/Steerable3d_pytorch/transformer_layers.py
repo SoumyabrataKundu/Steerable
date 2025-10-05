@@ -140,13 +140,16 @@ class SE3TransformerEncoder(torch.nn.Module):
     def __init__(self, transformer_dim, n_head, n_layers = 1, add_pos_enc=True):
         super(SE3TransformerEncoder, self).__init__()
 
+        hidden_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
+        hidden_dim = [2*d for d in hidden_dim]
         # Layer Design
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE3Transformer(transformer_dim, n_head, transformer_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
+            *[SE3Transformer(transformer_dim, n_head, hidden_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
         )
+        self.norm = SE3BatchNorm()
 
     def forward(self, x):
-        x = self.transformer_encoder(x)
+        x = self.norm(self.transformer_encoder(x))
         
         return x
 
@@ -161,8 +164,10 @@ class SE3TransformerDecoder(torch.nn.Module):
         self.transformer_dim = transformer_dim
         self.n_classes = n_classes
         self.maxl = len(self.transformer_dim) - 1
-        self.transformer_encoder = torch.nn.ModuleList(
-            [SE3Transformer(transformer_dim, n_head, transformer_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
+        hidden_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
+        hidden_dim = [2*d for d in hidden_dim]
+        self.transformer_encoder = torch.nn.Sequential(
+            *[SE3Transformer(transformer_dim, n_head, hidden_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
         )
 
         self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim[0], n_classes, dtype=torch.cfloat))
@@ -192,18 +197,13 @@ class SE3TransformerDecoder(torch.nn.Module):
                 class_embed = self.class_embed.expand(x[0].shape[0], -1, -1, -1)
             else:
                 class_embed = torch.zeros(*part.shape[:3], self.n_classes, dtype=torch.cfloat, device=part.device)
-            
             result.append(torch.cat([part.flatten(3), class_embed], dim=-1))
         
-        for module in self.transformer_encoder:
-            result = module(result)
-        result = self.norm(result)
-        
+        result = self.transformer_encoder(result)
         patches, cls_seg_feat = [], []
         for l, part in enumerate(result):
             patches.append(part[..., : -self.n_classes].reshape(x_shape[0], 2*l+1, -1, *x_shape[3:]))
             cls_seg_feat.append(part[..., -self.n_classes :])
-        
   
         return patches, cls_seg_feat
 
@@ -219,10 +219,10 @@ class SE3ClassEmbedings(torch.nn.Module):
         self.weight = torch.nn.ParameterList([
             torch.nn.Parameter(torch.randn(dim1, dim2, dtype=torch.cfloat)) for dim1, dim2 in zip(self.embedding_dim, self.transformer_dim)
         ])
-        
+        self.norm = SE3BatchNorm()
         
     def forward(self, x, classes):
-        classes = [self.weight[l] @ part for l, part in enumerate(classes)]
+        classes = self.norm([self.weight[l] @ part for l, part in enumerate(classes)])
         x, _ = merge_channel_dim(x)
         classes, _ = merge_channel_dim(classes)
         result = (torch.conj(classes).transpose(-2,-1) @ x.flatten(2)).reshape(x.shape[0], classes.shape[-1], *x.shape[2:])

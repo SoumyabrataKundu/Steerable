@@ -14,4 +14,4 @@ module load python
 source activate /home/soumyabratakundu/.conda/envs/conda_env
 
 
-python time.py --channel=CHANNEL --kernel=KERNEL --n_radius=RADIUS --max_m=MAXM --restricted=1 --conv_first=CONVFIRST
+python time.py --channel=CHANNEL --kernel=KERNEL --n_radius=RADIUS --max_m=MAXM --restricted=0 --conv_first=CONVFIRST

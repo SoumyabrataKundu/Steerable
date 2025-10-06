@@ -1,9 +1,15 @@
 
-channels=(2 4 8 16 32 64)
-kernels=(2 3 4 5)
-n_radius=(2 4 6 8)
-max_m=(4 8 12 16)
+channels=(1 2 4 8)
+kernels=(5)
+n_radius=(1 2 3 4)
+max_m=(0 1 2 3)
 conv_first=(0 1)
+
+wait_for_jobs() {
+    while [ $(squeue -u $USER | tail -n +2 | wc -l) -ge 28 ]; do
+        sleep 10
+    done
+}
 
 for channel in "${channels[@]}"
 do
@@ -24,15 +30,13 @@ do
                     sed -i "s/RESTRICTED/${restrict}/g" script_temp.sh
                     sed -i "s/CONVFIRST/${conv}/g" script_temp.sh
 
-                    JOB_ID=$(sbatch script_temp.sh | awk '{print $NF}')
+                    wait_for_jobs
+                    sbatch script_temp.sh
                     rm script_temp.sh
 
                 done
                 echo "Submitted Job -- Channel : ${channel}  Kernel : ${kernel}  Radius : ${radius}  Cutoff : ${k}"
 
-            done
-            while squeue -j "$JOB_ID"| grep "$JOB_ID" > /dev/null 2>&1; do
-                sleep 10
             done
             echo 
 

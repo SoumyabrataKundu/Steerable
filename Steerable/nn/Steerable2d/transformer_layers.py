@@ -129,7 +129,7 @@ class SE2TransformerEncoder(torch.nn.Module):
 
         # Layer Design
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, freq_cutoff, add_pos_enc) for _ in range(n_layers)]
+            *[SE2Transformer(transformer_dim, n_head, 4*transformer_dim, freq_cutoff, add_pos_enc) for _ in range(n_layers)]
         )
         self.norm = SE2BatchNorm()
 
@@ -152,7 +152,7 @@ class SE2TransformerDecoder(torch.nn.Module):
         self.freq_cutoff = freq_cutoff
         
         self.transformer_encoder = torch.nn.Sequential(
-            *[SE2Transformer(transformer_dim, n_head, 2*transformer_dim, freq_cutoff, add_pos_enc) for _ in range(n_layers)]
+            *[SE2Transformer(transformer_dim, n_head, 4*transformer_dim, freq_cutoff, add_pos_enc) for _ in range(n_layers)]
         )
 
         self.class_embed = torch.nn.Parameter(torch.randn(1, 1, transformer_dim, n_classes, dtype=torch.cfloat))

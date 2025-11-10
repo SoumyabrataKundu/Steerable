@@ -99,7 +99,7 @@ class SE3NormNonLinearity(torch.nn.Module):
         super(SE3NormNonLinearity, self).__init__()
         
         self.non_linearity = torch.nn.GELU()
-        self.eps = 1e-5
+        self.eps = 1e-4
         self.in_channels = [in_channels] if type(in_channels) is not list and type(in_channels) is not tuple else in_channels
         self.b = torch.nn.ParameterList([torch.nn.Parameter(
                                     torch.randn(self.in_channels[l], dtype = torch.float))
@@ -140,7 +140,7 @@ class SE3GatedNonLinearity(torch.nn.Module):
 class SE3BatchNorm(torch.nn.Module):
     def __init__(self):
         super(SE3BatchNorm, self).__init__()
-        self.eps = 1e-5
+        self.eps = 1e-4
 
     def forward(self, x):
         result = []

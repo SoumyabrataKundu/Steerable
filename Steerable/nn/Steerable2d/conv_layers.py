@@ -123,7 +123,7 @@ class SE2NormNonLinearity(torch.nn.Module):
     '''
     def __init__(self, in_channels, freq_cutoff, nonlinearity = torch.nn.ReLU()):
         super(SE2NormNonLinearity, self).__init__()
-        self.eps = 1e-5
+        self.eps = 1e-4
         self.nonlinearity = nonlinearity
         self.b = torch.nn.Parameter(torch.randn(freq_cutoff, in_channels))
 
@@ -141,7 +141,7 @@ class SE2NormNonLinearity(torch.nn.Module):
 class SE2BatchNorm(torch.nn.Module):
     def __init__(self):
         super(SE2BatchNorm, self).__init__()
-        self.eps = 1e-5
+        self.eps = 1e-4
 
     def forward(self, x):
         factor = torch.linalg.vector_norm(x, dim = (1,), keepdim=True) + self.eps

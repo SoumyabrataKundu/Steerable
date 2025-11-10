@@ -141,7 +141,7 @@ class SE3TransformerEncoder(torch.nn.Module):
         super(SE3TransformerEncoder, self).__init__()
 
         hidden_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
-        hidden_dim = [2*d for d in hidden_dim]
+        hidden_dim = [4*d for d in hidden_dim]
         # Layer Design
         self.transformer_encoder = torch.nn.Sequential(
             *[SE3Transformer(transformer_dim, n_head, hidden_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
@@ -165,7 +165,7 @@ class SE3TransformerDecoder(torch.nn.Module):
         self.n_classes = n_classes
         self.maxl = len(self.transformer_dim) - 1
         hidden_dim = [transformer_dim] if type(transformer_dim) is not list and type(transformer_dim) is not tuple else transformer_dim
-        hidden_dim = [2*d for d in hidden_dim]
+        hidden_dim = [4*d for d in hidden_dim]
         self.transformer_encoder = torch.nn.Sequential(
             *[SE3Transformer(transformer_dim, n_head, hidden_dim, add_pos_enc=add_pos_enc) for _ in range(n_layers)]
         )
